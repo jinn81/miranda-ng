@@ -34,7 +34,8 @@ void FacebookProto::OnLoggedIn()
 {
 	m_mid = 0;
 
-	MqttPublish("/foreground_state", "{\"foreground\":true, \"keepalive_timeout\":60}");
+	JSONNode root; root << BOOL_PARAM("foreground", true) << INT_PARAM("keepalive_timeout", 60);
+	MqttPublish("/foreground_state", root);
 
 	MqttSubscribe("/inbox", "/mercury", "/messaging_events", "/orca_presence", "/orca_typing_notifications", "/pp", "/t_ms", "/t_p", "/t_rtc", "/webrtc", "/webrtc_response", 0);
 	MqttUnsubscribe("/orca_message_notifications", 0);
@@ -342,6 +343,28 @@ LBL_Begin:
 	m_mqttConn = nullptr;
 
 	OnLoggedOut();
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+
+int FacebookProto::OnMarkedRead(WPARAM, LPARAM hDbEvent)
+{
+	MCONTACT hContact = db_event_getContact(hDbEvent);
+	if (!hContact)
+		return 0;
+
+	// filter out only events of my protocol
+	const char *szProto = Proto_GetBaseAccountName(hContact);
+	if (mir_strcmp(szProto, m_szModuleName))
+		return 0;
+
+	JSONNode root; root << BOOL_PARAM("state", true) << INT_PARAM("syncSeqId", m_sid) << CHAR_PARAM("mark", "read");
+	if (isChatRoom(hContact))
+		root << CHAR_PARAM("threadFbId", getMStringA(hContact, DBKEY_ID));
+	else
+		root << CHAR_PARAM("otherUserFbId", getMStringA(hContact, DBKEY_ID));
+	MqttPublish("/mark_thread", root);
+	return 0;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////

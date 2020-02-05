@@ -418,7 +418,7 @@ class FacebookProto : public PROTO<FacebookProto>
    void MqttLogin();
    
    void MqttPing();
-   void MqttPublish(const char *topic, const char *value);
+   void MqttPublish(const char *topic, const JSONNode &value);
    void MqttSubscribe(const char *topic, ...);
    void MqttUnsubscribe(const char *topic, ...);
 
@@ -510,6 +510,7 @@ public:
    ////////////////////////////////////////////////////////////////////////////////////////
    // Events
 
+   int __cdecl OnMarkedRead(WPARAM, LPARAM);
    int __cdecl OnOptionsInit(WPARAM, LPARAM);
    
    int __cdecl GroupchatMenuHook(WPARAM, LPARAM);

@@ -109,6 +109,7 @@ FacebookProto::FacebookProto(const char *proto_name, const wchar_t *username) :
 	HookProtoEvent(ME_GC_EVENT, &FacebookProto::GroupchatEventHook);
 	HookProtoEvent(ME_GC_BUILDMENU, &FacebookProto::GroupchatMenuHook);
 	HookProtoEvent(ME_OPT_INITIALISE, &FacebookProto::OnOptionsInit);
+	HookProtoEvent(ME_DB_EVENT_MARKED_READ, &FacebookProto::OnMarkedRead);
 
 	// Default group
 	Clist_GroupCreate(0, m_wszDefaultGroup);
@@ -192,9 +193,8 @@ int FacebookProto::SendMsg(MCONTACT hContact, int, const char *pszSrc)
 	Utils_GetRandom(&msgId, sizeof(msgId));
 	msgId = abs(msgId);
 
-	JSONNode root;
-	root << CHAR_PARAM("body", pszSrc) << INT64_PARAM("msgid", msgId) << INT64_PARAM("sender_fbid", m_uid) << CHAR_PARAM("to", userId);
-	MqttPublish("/send_message2", root.write().c_str());
+	JSONNode root; root << CHAR_PARAM("body", pszSrc) << INT64_PARAM("msgid", msgId) << INT64_PARAM("sender_fbid", m_uid) << CHAR_PARAM("to", userId);
+	MqttPublish("/send_message2", root);
 
 	arOwnMessages.insert(new COwnMessage(msgId, m_mid));
 	return m_mid;
@@ -262,9 +262,8 @@ int FacebookProto::SetStatus(int iNewStatus)
 
 int FacebookProto::UserIsTyping(MCONTACT hContact, int type)
 {
-	ptrA id(getStringA(hContact, DBKEY_ID));
-	CMStringA json(FORMAT, "{\"state\":%d, \"to\":\"%s\"}", type == PROTOTYPE_SELFTYPING_ON, id.get());
-	MqttPublish("/typing", json);
+	JSONNode root; root << INT_PARAM("state", type == PROTOTYPE_SELFTYPING_ON) << CHAR_PARAM("to", getMStringA(hContact, DBKEY_ID));
+	MqttPublish("/typing", root);
 	return 0;
 }
 
