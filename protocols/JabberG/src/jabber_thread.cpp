@@ -1053,24 +1053,39 @@ void CJabberProto::OnProcessMessage(const TiXmlElement *node, ThreadData *info)
 		return;
 
 	const char *from, *type = XmlGetAttr(node, "type");
-	if ((from = XmlGetAttr(node, "from")) == nullptr)
+	if ((from = XmlGetAttr(node, "from")) == nullptr) {
+		debugLogA("no 'from' attribute, returning");
 		return;
+	}
 
 	const char *idStr = XmlGetAttr(node, "id");
 	pResourceStatus pFromResource(ResourceInfoFromJID(from));
 
 	// Message receipts delivery request. Reply here, before a call to HandleMessagePermanent() to make sure message receipts are handled for external plugins too.
-	if ((!type || mir_strcmpi(type, "error")) && XmlGetChildByTag(node, "request", "xmlns", JABBER_FEAT_MESSAGE_RECEIPTS)) {
-		info->send(
-			XmlNode("message") << XATTR("to", from) << XATTR("id", idStr)
-			<< XCHILDNS("received", JABBER_FEAT_MESSAGE_RECEIPTS) << XATTR("id", idStr));
-
-		if (pFromResource)
-			pFromResource->m_jcbManualDiscoveredCaps |= JABBER_CAPS_MESSAGE_RECEIPTS;
+	bool bSendMark = false;
+	if ((!type || mir_strcmpi(type, "error"))) {
+		bool bSendReceipt = XmlGetChildByTag(node, "request", "xmlns", JABBER_FEAT_MESSAGE_RECEIPTS) != 0;
+		bSendMark = XmlGetChildByTag(node, "markable", "xmlns", JABBER_FEAT_CHAT_MARKERS) != 0;
+		if (bSendReceipt || bSendMark) {
+			XmlNode reply("message"); reply << XATTR("to", from) << XATTR("id", idStr);
+			if (bSendReceipt) {
+				if (pFromResource)
+					pFromResource->m_jcbManualDiscoveredCaps |= JABBER_CAPS_MESSAGE_RECEIPTS;
+				reply << XCHILDNS("received", JABBER_FEAT_MESSAGE_RECEIPTS) << XATTR("id", idStr);
+			}
+			if (bSendMark) {
+				if (pFromResource)
+					pFromResource->m_jcbManualDiscoveredCaps |= JABBER_CAPS_CHAT_MARKERS;
+				reply << XCHILDNS("received", JABBER_FEAT_CHAT_MARKERS) << XATTR("id", idStr);
+			}
+			info->send(reply);
+		}
 	}
 
-	if (m_messageManager.HandleMessagePermanent(node, info))
+	if (m_messageManager.HandleMessagePermanent(node, info)) {
+		debugLogA("permanent message handler succeeded, returning");
 		return;
+	}
 
 	// Handle carbons. The message MUST be coming from our bare JID.
 	const TiXmlElement *carbon = nullptr;
@@ -1084,14 +1099,18 @@ void CJabberProto::OnProcessMessage(const TiXmlElement *node, ThreadData *info)
 		}
 		if (carbon) {
 			// If carbons are disabled in options, we should ignore occasional carbons sent to us by server
-			if (!m_bEnableCarbons)
+			if (!m_bEnableCarbons) {
+				debugLogA("carbons aren't enabled, returning");
 				return;
+			}
 
 			auto *xmlForwarded = XmlGetChildByTag(carbon, "forwarded", "xmlns", JABBER_XMLNS_FORWARD);
 			auto *xmlMessage = XmlFirstChild(xmlForwarded, "message");
 			// Carbons MUST have forwarded/message content
-			if (xmlMessage == nullptr)
+			if (xmlMessage == nullptr) {
+				debugLogA("no 'forwarded' attribute in carbons, returning");
 				return;
+			}
 
 			// Unwrap the carbon in any case
 			node = xmlMessage;
@@ -1100,14 +1119,18 @@ void CJabberProto::OnProcessMessage(const TiXmlElement *node, ThreadData *info)
 			if (!carbonSent) {
 				// Received should just be treated like incoming messages, except maybe not flash the flasher. Simply unwrap.
 				from = XmlGetAttr(node, "from");
-				if (from == nullptr)
+				if (from == nullptr) {
+					debugLogA("no 'from' attribute in carbons, returning");
 					return;
+				}
 			}
 			else {
 				// Sent should set SENT flag and invert from/to.
 				from = XmlGetAttr(node, "to");
-				if (from == nullptr)
+				if (from == nullptr) {
+					debugLogA("no 'to' attribute in carbons, returning");
 					return;
+				}
 			}
 		}
 	}
@@ -1117,8 +1140,10 @@ void CJabberProto::OnProcessMessage(const TiXmlElement *node, ThreadData *info)
 	if (chatItem) {
 		auto *xCaptcha = XmlFirstChild(node, "captcha");
 		if (xCaptcha)
-			if (ProcessCaptcha(xCaptcha, node, info))
+			if (ProcessCaptcha(xCaptcha, node, info)) {
+				debugLogA("captcha processing succeeded, returning");
 				return;
+			}
 	}
 
 	CMStringA szMessage;
@@ -1185,15 +1210,15 @@ void CJabberProto::OnProcessMessage(const TiXmlElement *node, ThreadData *info)
 		int nPacketId = JabberGetPacketID(n);
 		if (nPacketId == -1)
 			nPacketId = JabberGetPacketID(node);
-		if (nPacketId != -1) {
+		if (nPacketId != -1)
 			ProtoBroadcastAck(hContact, ACKTYPE_MESSAGE, ACKRESULT_SUCCESS, (HANDLE)nPacketId, 0);
-
-			if (g_plugin.bMessageState) {
-				MessageReadData readData(time(0), MRD_TYPE_READTIME);
-				CallService(MS_MESSAGESTATE_UPDATE, hContact, (LPARAM)&readData);
-			}
-		}
 	}
+
+	if (auto *n = XmlGetChildByTag(node, "displayed", "xmlns", JABBER_FEAT_CHAT_MARKERS))
+		if (g_plugin.bMessageState) {
+			MessageReadData readData(time(0), MRD_TYPE_READTIME);
+			CallService(MS_MESSAGESTATE_UPDATE, hContact, (LPARAM)&readData);
+		}
 
 	JabberReadXep203delay(node, msgTime);
 
@@ -1222,13 +1247,12 @@ void CJabberProto::OnProcessMessage(const TiXmlElement *node, ThreadData *info)
 		const char *szId = XmlGetAttr(n, "id");
 		const char *szMethod = XmlGetAttr(n, "method");
 		const char *szUrl = XmlGetAttr(n, "url");
-		if (!szId || !szMethod || !szUrl)
+		if (!szId || !szMethod || !szUrl) {
+			debugLogA("missing attributes in confirm, returning");
 			return;
+		}
 
-		CJabberHttpAuthParams *pParams = (CJabberHttpAuthParams *)mir_alloc(sizeof(CJabberHttpAuthParams));
-		if (!pParams)
-			return;
-
+		CJabberHttpAuthParams *pParams = (CJabberHttpAuthParams *)mir_calloc(sizeof(CJabberHttpAuthParams));
 		memset(pParams, 0, sizeof(CJabberHttpAuthParams));
 		pParams->m_nType = CJabberHttpAuthParams::MSG;
 		pParams->m_szFrom = mir_strdup(from);
@@ -1238,6 +1262,7 @@ void CJabberProto::OnProcessMessage(const TiXmlElement *node, ThreadData *info)
 		pParams->m_szUrl = mir_strdup(szUrl);
 
 		AddClistHttpAuthEvent(pParams);
+		debugLogA("http auth event added, returning");
 		return;
 	}
 
@@ -1249,6 +1274,7 @@ void CJabberProto::OnProcessMessage(const TiXmlElement *node, ThreadData *info)
 				if (jid) {
 					if (!OmemoHandleMessage(xNode, jid, msgTime))
 						OmemoPutMessageToIncommingQueue(xNode, jid, msgTime);
+					debugLogA("OMEMO processing finished, returning");
 					return; //we do not want any additional processing
 				}
 			}
@@ -1262,13 +1288,17 @@ void CJabberProto::OnProcessMessage(const TiXmlElement *node, ThreadData *info)
 			continue;
 
 		if (!mir_strcmp(pszXmlns, JABBER_FEAT_MIRANDA_NOTES)) {
-			if (OnIncomingNote(from, XmlFirstChild(xNode, "note")))
+			if (OnIncomingNote(from, XmlFirstChild(xNode, "note"))) {
+				debugLogA("OMEMO: no 'note' attribute, returning");
 				return;
+			}
 		}
 		else if (!mir_strcmp(pszXmlns, "jabber:x:encrypted")) {
 			const char *ptszText = xNode->GetText();
-			if (ptszText == nullptr)
+			if (ptszText == nullptr) {
+				debugLogA("OMEMO: no 'encrypted' attribute, returning");
 				return;
+			}
 
 			// XEP-0027 is not strict enough, different clients have different implementations
 			// additional validation is required
@@ -1358,12 +1388,15 @@ void CJabberProto::OnProcessMessage(const TiXmlElement *node, ThreadData *info)
 			}
 			else GroupchatProcessInvite(inviteRoomJid, inviteFromJid, inviteReason, invitePassword);
 		}
+		debugLogA("chat room invitation processed, returning");
 		return;
 	}
 
 	// all service info was already processed
-	if (szMessage.IsEmpty())
+	if (szMessage.IsEmpty()) {
+		debugLogA("empty message, returning");
 		return;
+	}
 
 	szMessage += ExtractImage(node);
 	szMessage.Replace("\n", "\r\n");
@@ -1399,6 +1432,10 @@ void CJabberProto::OnProcessMessage(const TiXmlElement *node, ThreadData *info)
 	}
 	recv.timestamp = (DWORD)msgTime;
 	recv.szMessage = szMessage.GetBuffer();
+	if (bSendMark) {
+		recv.szMsgId = idStr;
+		recv.lParam = (LPARAM)from;
+	}
 	ProtoChainRecvMsg(hContact, &recv);
 }
 
