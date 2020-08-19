@@ -191,8 +191,13 @@ void strm_mgmt::HandleOutgoingNode(TiXmlElement *node)
 {
 	if (!m_bStrmMgmtEnabled)
 		return;
+	
+	auto *pNodeCopy = node->DeepClone(&xmlStorage)->ToElement();
+	if (pNodeCopy == nullptr)
+		return;
+
 	m_nStrmMgmtLocalSCount++;
-	NodeCache.push_back(node->DeepClone(&xmlStorage)->ToElement());
+	NodeCache.push_back(pNodeCopy);
 	if ((m_nStrmMgmtLocalSCount - m_nStrmMgmtSrvHCount) >= m_nStrmMgmtCacheSize)
 		RequestAck();
 }
@@ -268,19 +273,18 @@ bool strm_mgmt::IsResumeIdPresent()
 
 void strm_mgmt::FinishLoginProcess(ThreadData *info)
 {
-
-	if (info->auth) { //We are already logged-in
+	if (proto->m_arAuthMechs.getCount()) { //We are already logged-in
 		info->send(
 			XmlNodeIq(proto->AddIQ(&CJabberProto::OnIqResultBind, JABBER_IQ_TYPE_SET))
 			<< XCHILDNS("bind", JABBER_FEAT_BIND)
 			<< XCHILD("resource", info->resource));
 
-		if (proto->m_AuthMechs.isSessionAvailable)
-			info->bIsSessionAvailable = TRUE;
+		if (proto->m_isSessionAvailable)
+			info->bIsSessionAvailable = true;
 
 		return;
 	}
 
-	//mechanisms not available and we are not logged in
+	// mechanisms not available and we are not logged in
 	proto->PerformIqAuth(info);
 }

@@ -136,9 +136,9 @@ struct EventItem
 	MEVENT eventId;
 };
 
-class CDbxMDBX : public MDatabaseCommon, public MZeroedObject
+class CDbxMDBX : public MDatabaseCommon, public MIDatabaseChecker, public MZeroedObject
 {
-	friend class MDBXEventCursor;
+	friend class CMdbxEventCursor;
 
 	struct Impl {
 		CDbxMDBX &pro;
@@ -168,7 +168,7 @@ class CDbxMDBX : public MDatabaseCommon, public MZeroedObject
 	}
 
 	bool CheckEvent(DBCachedContact *cc, const DBEvent *dbe, DBCachedContact *&cc2);
-	bool EditEvent(MCONTACT contactID, MEVENT hDbEvent, DBEVENTINFO *dbe, bool bNew);
+	bool EditEvent(MCONTACT contactID, MEVENT hDbEvent, const DBEVENTINFO *dbe, bool bNew);
 	void FillContacts(void);
 	int  PrepareCheck(void);
 	void TouchFile(void);
@@ -251,6 +251,10 @@ public:
 	void StoreKey(void);
 	void SetPassword(const wchar_t *ptszPassword);
 
+	int  CheckEvents1(void);
+	int  CheckEvents2(void);
+	int  CheckEvents3(void);
+
 	__forceinline LPSTR GetMenuTitle() const { return m_bUsesPassword ? (char*)LPGEN("Change/remove password") : (char*)LPGEN("Set password"); }
 
 	__forceinline bool isEncrypted() const { return m_bEncrypted; }
@@ -267,9 +271,9 @@ public:
 	STDMETHODIMP_(LONG)     GetContactSize(void) override;
 
 	STDMETHODIMP_(LONG)     GetEventCount(MCONTACT contactID) override;
-	STDMETHODIMP_(MEVENT)   AddEvent(MCONTACT contactID, DBEVENTINFO *dbe) override;
+	STDMETHODIMP_(MEVENT)   AddEvent(MCONTACT contactID, const DBEVENTINFO *dbe) override;
 	STDMETHODIMP_(BOOL)     DeleteEvent(MEVENT hDbEvent) override;
-	STDMETHODIMP_(BOOL)     EditEvent(MCONTACT contactID, MEVENT hDbEvent, DBEVENTINFO *dbe) override;
+	STDMETHODIMP_(BOOL)     EditEvent(MCONTACT contactID, MEVENT hDbEvent, const DBEVENTINFO *dbe) override;
 	STDMETHODIMP_(LONG)     GetBlobSize(MEVENT hDbEvent) override;
 	STDMETHODIMP_(BOOL)     GetEvent(MEVENT hDbEvent, DBEVENTINFO *dbe) override;
 	STDMETHODIMP_(BOOL)     MarkEventRead(MCONTACT contactID, MEVENT hDbEvent) override;
@@ -296,7 +300,21 @@ public:
 	STDMETHODIMP_(BOOL)     Backup(const wchar_t*);
 
 	STDMETHODIMP_(MEVENT)   GetEventById(LPCSTR szModule, LPCSTR szId) override;
-	STDMETHODIMP_(BOOL)     SetEventId(LPCSTR szModule, MEVENT, LPCSTR szId) override;
+	
+	STDMETHODIMP_(DB::EventCursor *) EventCursor(MCONTACT hContact, MEVENT hDbEvent) override;
+	STDMETHODIMP_(DB::EventCursor *) EventCursorRev(MCONTACT hContact, MEVENT hDbEvent) override;
+
+protected:
+	STDMETHODIMP_(MIDatabaseChecker *) GetChecker() override
+	{
+		return this;
+	}
+
+	STDMETHODIMP_(BOOL)     Start(DBCHeckCallback *callback);
+	STDMETHODIMP_(BOOL)     CheckDb(int phase);
+	STDMETHODIMP_(VOID)     Destroy();
+
+	DBCHeckCallback *cb;
 
 public:
 	MICryptoEngine *m_crypto;

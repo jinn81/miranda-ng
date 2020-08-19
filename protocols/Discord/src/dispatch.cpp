@@ -76,74 +76,6 @@ GatewayHandlerFunc CDiscordProto::GetHandler(const wchar_t *pwszCommand)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
-// call operations (voice & video)
-
-void CDiscordProto::OnCommandCallCreated(const JSONNode &pRoot)
-{
-	for (auto &it : pRoot["voice_states"]) {
-		SnowFlake channelId = ::getId(pRoot["channel_id"]);
-		auto *pUser = FindUserByChannel(channelId);
-		if (pUser == nullptr) {
-			debugLogA("Call from unknown channel %lld, skipping", channelId);
-			continue;
-		}
-
-		auto *pCall = new CDiscordVoiceCall();
-		pCall->szId = it["session_id"].as_mstring();
-		pCall->channelId = channelId;
-		pCall->startTime = time(0);
-		arVoiceCalls.insert(pCall);
-
-		char *szMessage = TranslateU("Incoming call");
-		DBEVENTINFO dbei = {};
-		dbei.szModule = m_szModuleName;
-		dbei.timestamp = pCall->startTime;
-		dbei.eventType = EVENT_INCOMING_CALL;
-		dbei.cbBlob = DWORD(mir_strlen(szMessage)+1);
-		dbei.pBlob = (BYTE*)szMessage;
-		dbei.flags = DBEF_UTF;
-		db_event_add(pUser->hContact, &dbei);
-	}
-}
-
-void CDiscordProto::OnCommandCallDeleted(const JSONNode &pRoot)
-{
-	SnowFlake channelId = ::getId(pRoot["channel_id"]);
-	auto *pUser = FindUserByChannel(channelId);
-	if (pUser == nullptr) {
-		debugLogA("Call from unknown channel %lld, skipping", channelId);
-		return;
-	}
-
-	int elapsed = 0, currTime = time(0);
-	for (auto &call : arVoiceCalls.rev_iter())
-		if (call->channelId == channelId) {
-			elapsed = currTime - call->startTime;
-			arVoiceCalls.removeItem(&call);
-			break;
-		}
-
-	if (!elapsed) {
-		debugLogA("Call from channel %lld isn't registered, skipping", channelId);
-		return;
-	}
-
-	CMStringA szMessage(FORMAT, TranslateU("Call ended, %d seconds long"), elapsed);
-	DBEVENTINFO dbei = {};
-	dbei.szModule = m_szModuleName;
-	dbei.timestamp = currTime;
-	dbei.eventType = EVENT_CALL_FINISHED;
-	dbei.cbBlob = DWORD(szMessage.GetLength() + 1);
-	dbei.pBlob = (BYTE *)szMessage.c_str();
-	dbei.flags = DBEF_UTF;
-	db_event_add(pUser->hContact, &dbei);
-}
-
-void CDiscordProto::OnCommandCallUpdated(const JSONNode &pRoot)
-{
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////
 // channel operations
 
 void CDiscordProto::OnCommandChannelCreated(const JSONNode &pRoot)
@@ -517,22 +449,11 @@ void CDiscordProto::OnCommandMessageDelete(const JSONNode &pRoot)
 
 void CDiscordProto::OnCommandPresence(const JSONNode &pRoot)
 {
-	CDiscordUser *pUser = FindUser(::getId(pRoot["user"]["id"]));
-	if (pUser == nullptr)
-		return;
-
-	int iStatus = StrToStatus(pRoot["status"].as_mstring());
-	if (iStatus != 0)
-		setWord(pUser->hContact, "Status", iStatus);
-
-	CMStringW wszGame = pRoot["game"]["name"].as_mstring();
-	if (!wszGame.IsEmpty())
-		setWString(pUser->hContact, "XStatusMsg", wszGame);
-	else
-		delSetting(pUser->hContact, "XStatusMsg");
-
-	// check avatar
-	CheckAvatarChange(pUser->hContact, pRoot["user"]["avatar"].as_mstring());
+	auto *pGuild = FindGuild(::getId(pRoot["user"]["guild_id"]));
+	if (pGuild == nullptr)
+		ProcessPresence(pRoot);
+	// else
+		// pGuild->ProcessPresence(pRoot);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -553,11 +474,8 @@ void CDiscordProto::OnCommandReady(const JSONNode &pRoot)
 		ProcessType(pUser, it);
 	}
 
-	for (auto &it : pRoot["presences"]) {
-		CDiscordUser *pUser = FindUser(::getId(it["user"]["id"]));
-		if (pUser != nullptr)
-			setWord(pUser->hContact, "Status", StrToStatus(it["status"].as_mstring()));
-	}
+	for (auto &it : pRoot["presences"])
+		ProcessPresence(it);
 
 	for (auto &it : pRoot["private_channels"])
 		PreparePrivateChannel(it);

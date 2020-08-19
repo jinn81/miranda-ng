@@ -269,8 +269,6 @@ INT_PTR __cdecl CJabberProto::JabberSetAvatar(WPARAM, LPARAM lParam)
 		char buf[MIR_SHA1_HASH_SIZE * 2 + 1];
 		bin2hex(digest, sizeof(digest), buf);
 
-		m_bAvatarType = ProtoGetBufferFormat(pResult);
-
 		GetAvatarFileName(0, tFileName, MAX_PATH);
 		FILE *out = _wfopen(tFileName, L"wb");
 		if (out != nullptr) {
@@ -513,10 +511,10 @@ INT_PTR __cdecl CJabberProto::JabberSendNudge(WPARAM hContact, LPARAM)
 	return 0;
 }
 
-BOOL CJabberProto::SendHttpAuthReply(CJabberHttpAuthParams *pParams, BOOL bAuthorized)
+bool CJabberProto::SendHttpAuthReply(CJabberHttpAuthParams *pParams, bool bAuthorized)
 {
 	if (!m_bJabberOnline || !pParams || !m_ThreadInfo)
-		return FALSE;
+		return false;
 
 	if (pParams->m_nType == CJabberHttpAuthParams::IQ) {
 		XmlNodeIq iq(bAuthorized ? "result" : "error", pParams->m_szIqId, pParams->m_szFrom);
@@ -527,8 +525,10 @@ BOOL CJabberProto::SendHttpAuthReply(CJabberHttpAuthParams *pParams, BOOL bAutho
 				<< XCHILDNS("not-authorized", "urn:ietf:params:xml:xmpp-stanzas");
 		}
 		m_ThreadInfo->send(iq);
+		return true;
 	}
-	else if (pParams->m_nType == CJabberHttpAuthParams::MSG) {
+	
+	if (pParams->m_nType == CJabberHttpAuthParams::MSG) {
 		XmlNode msg("message");
 		msg << XATTR("to", pParams->m_szFrom);
 		if (!bAuthorized)
@@ -544,28 +544,26 @@ BOOL CJabberProto::SendHttpAuthReply(CJabberHttpAuthParams *pParams, BOOL bAutho
 			<< XCHILDNS("not-authorized", "urn:ietf:params:xml:xmpp-stanzas");
 
 		m_ThreadInfo->send(msg);
+		return true;
 	}
-	else return FALSE;
-
-	return TRUE;
+	return false;
 }
 
 class CJabberDlgHttpAuth : public CJabberDlgBase
 {
 	typedef CJabberDlgBase CSuper;
 
+	CCtrlEdit	m_txtInfo;
+
+	CJabberHttpAuthParams *m_pParams;
+
 public:
 	CJabberDlgHttpAuth(CJabberProto *proto, HWND hwndParent, CJabberHttpAuthParams *pParams) :
 		CSuper(proto, IDD_HTTP_AUTH),
 		m_txtInfo(this, IDC_EDIT_HTTP_AUTH_INFO),
-		m_btnAuth(this, IDOK),
-		m_btnDeny(this, IDCANCEL),
 		m_pParams(pParams)
 	{
 		SetParent(hwndParent);
-
-		m_btnAuth.OnClick = Callback(this, &CJabberDlgHttpAuth::btnAuth_OnClick);
-		m_btnDeny.OnClick = Callback(this, &CJabberDlgHttpAuth::btnDeny_OnClick);
 	}
 
 	bool OnInitDialog() override
@@ -581,24 +579,11 @@ public:
 		return true;
 	}
 
-	BOOL SendReply(BOOL bAuthorized)
+	void OnDestroy() override
 	{
-		BOOL bRetVal = m_proto->SendHttpAuthReply(m_pParams, bAuthorized);
+		m_proto->SendHttpAuthReply(m_pParams, m_bSucceeded);
 		m_pParams->Free();
 		mir_free(m_pParams);
-		m_pParams = nullptr;
-		return bRetVal;
-	}
-
-	void btnAuth_OnClick(CCtrlButton*)
-	{
-		SendReply(TRUE);
-		Close();
-	}
-	void btnDeny_OnClick(CCtrlButton*)
-	{
-		SendReply(FALSE);
-		Close();
 	}
 
 	UI_MESSAGE_MAP(CJabberDlgHttpAuth, CSuper);
@@ -609,13 +594,6 @@ public:
 	{
 		return (INT_PTR)GetSysColorBrush(COLOR_WINDOW);
 	}
-
-private:
-	CCtrlEdit	m_txtInfo;
-	CCtrlButton	m_btnAuth;
-	CCtrlButton	m_btnDeny;
-
-	CJabberHttpAuthParams *m_pParams;
 };
 
 // XEP-0070 support (http auth)

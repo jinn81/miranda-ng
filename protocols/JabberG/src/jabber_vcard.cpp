@@ -282,7 +282,7 @@ static INT_PTR CALLBACK PhotoDlgProc(HWND hwndDlg, UINT msg, WPARAM wParam, LPAR
 			dat = new PhotoDlgProcData;
 			dat->ppro = (CJabberProto*)lParam;
 			dat->hBitmap = nullptr;
-			dat->ppro->m_bPhotoChanged = FALSE;
+			dat->ppro->m_bPhotoChanged = false;
 			SetWindowLongPtr(hwndDlg, GWLP_USERDATA, (LONG_PTR)dat);
 			dat->ppro->WindowSubscribe(hwndDlg);
 		}
@@ -315,13 +315,9 @@ static INT_PTR CALLBACK PhotoDlgProc(HWND hwndDlg, UINT msg, WPARAM wParam, LPAR
 			}
 		}
 
-		dat->ppro->m_bPhotoChanged = FALSE;
+		dat->ppro->m_bPhotoChanged = false;
 		InvalidateRect(hwndDlg, nullptr, TRUE);
 		UpdateWindow(hwndDlg);
-		break;
-
-	case WM_JABBER_CHANGED:
-		dat->ppro->SetServerVcard(dat->ppro->m_bPhotoChanged, dat->ppro->m_szPhotoFileName);
 		break;
 
 	case WM_COMMAND:
@@ -332,7 +328,7 @@ static INT_PTR CALLBACK PhotoDlgProc(HWND hwndDlg, UINT msg, WPARAM wParam, LPAR
 				dat->hBitmap = nullptr;
 				DeleteFile(dat->ppro->m_szPhotoFileName);
 				dat->ppro->m_szPhotoFileName[0] = '\0';
-				dat->ppro->m_bPhotoChanged = TRUE;
+				dat->ppro->m_bPhotoChanged = true;
 				EnableWindow(GetDlgItem(hwndDlg, IDC_DELETE), FALSE);
 				InvalidateRect(hwndDlg, nullptr, TRUE);
 				UpdateWindow(hwndDlg);
@@ -377,7 +373,7 @@ static INT_PTR CALLBACK PhotoDlgProc(HWND hwndDlg, UINT msg, WPARAM wParam, LPAR
 
 							dat->hBitmap = hNewBitmap;
 							mir_wstrcpy(dat->ppro->m_szPhotoFileName, szTempFileName);
-							dat->ppro->m_bPhotoChanged = TRUE;
+							dat->ppro->m_bPhotoChanged = true;
 							EnableWindow(GetDlgItem(hwndDlg, IDC_DELETE), TRUE);
 							InvalidateRect(hwndDlg, nullptr, TRUE);
 							UpdateWindow(hwndDlg);
@@ -1153,8 +1149,6 @@ void CJabberProto::SetServerVcard(BOOL bPhotoChanged, wchar_t *szPhotoFileName)
 							char buf[MIR_SHA1_HASH_SIZE * 2 + 1];
 							bin2hex(digest, sizeof(digest), buf);
 
-							m_bAvatarType = ProtoGetBufferFormat(buffer);
-
 							if (bPhotoChanged) {
 								DeleteFile(szAvatarName);
 
@@ -1183,7 +1177,7 @@ void CJabberProto::SetServerVcard(BOOL bPhotoChanged, wchar_t *szPhotoFileName)
 void CJabberProto::OnUserInfoInit_VCard(WPARAM wParam, LPARAM)
 {
 	m_vCardUpdates = 0;
-	m_bPhotoChanged = FALSE;
+	m_bPhotoChanged = false;
 	m_szPhotoFileName[0] = 0;
 
 	OPTIONSDIALOGPAGE odp = {};

@@ -128,7 +128,6 @@ public:
 	virtual HWND     GetHwnd() = 0;
 	virtual wchar_t* GetSelection() = 0;
 	virtual void     LogEvents(MEVENT hDbEventFirst, int count, bool bAppend) = 0;
-	virtual void     LogEvents(DBEVENTINFO *dbei, bool bAppend) = 0;
 	virtual void     LogEvents(struct LOGINFO *, bool) = 0;
 	virtual void     Resize() = 0;
 	virtual void     ScrollToBottom() = 0;
@@ -197,6 +196,8 @@ protected:
 	INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam) override;
 
 	int  NotifyEvent(int code);
+	bool ProcessFileDrop(HDROP hDrop, MCONTACT hContact);
+	bool PasteFilesAsURL(HDROP hDrop);
 	bool ProcessHotkeys(int key, bool bShift, bool bCtrl, bool bAlt);
 	void RefreshButtonStatus(void);
 	void RunUserMenu(HWND hwndOwner, struct USERINFO *ui, const POINT &pt);
@@ -249,6 +250,7 @@ public:
 	virtual LRESULT WndProc_Nicklist(UINT msg, WPARAM wParam, LPARAM lParam);
 
 	__forceinline bool isChat() const { return m_si != nullptr; }
+	__forceinline SESSION_INFO *getChat() const { return m_si; }
 	__forceinline CSrmmLogWindow *log() const { return m_pLog; }
 
 	__inline void *operator new(size_t size) { return calloc(1, size); }

@@ -28,6 +28,29 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 	#include <m_core.h>
 #endif
 
+///////////////////////////////////////////////////////////////////////////////
+// basic database checker interface
+
+#define STATUS_MESSAGE    0
+#define STATUS_WARNING    1
+#define STATUS_ERROR      2
+#define STATUS_FATAL      3
+#define STATUS_SUCCESS    4
+
+struct DBCHeckCallback
+{
+	DWORD  spaceProcessed, spaceUsed;
+
+	void (*pfnAddLogMessage)(int type, const wchar_t *ptszFormat, ...);
+};
+
+interface MIDatabaseChecker
+{
+	STDMETHOD_(BOOL, Start)(DBCHeckCallback *callback) PURE;
+	STDMETHOD_(BOOL, CheckDb)(int phase) PURE;
+	STDMETHOD_(VOID, Destroy)() PURE;
+};
+
 /////////////////////////////////////////////////////////////////////////////////////////
 // basic database interface
 
@@ -95,9 +118,9 @@ interface MIR_APP_EXPORT MIDatabase
 	STDMETHOD_(LONG, GetContactSize)(void) PURE;
 
 	STDMETHOD_(LONG, GetEventCount)(MCONTACT contactID) PURE;
-	STDMETHOD_(MEVENT, AddEvent)(MCONTACT contactID, DBEVENTINFO *dbe) PURE;
+	STDMETHOD_(MEVENT, AddEvent)(MCONTACT contactID, const DBEVENTINFO *dbe) PURE;
 	STDMETHOD_(BOOL, DeleteEvent)(MEVENT hDbEvent) PURE;
-	STDMETHOD_(BOOL, EditEvent)(MCONTACT contactID, MEVENT hDbEvent, DBEVENTINFO *dbe) PURE;
+	STDMETHOD_(BOOL, EditEvent)(MCONTACT contactID, MEVENT hDbEvent, const DBEVENTINFO *dbe) PURE;
 	STDMETHOD_(LONG, GetBlobSize)(MEVENT hDbEvent) PURE;
 	STDMETHOD_(BOOL, GetEvent)(MEVENT hDbEvent, DBEVENTINFO *dbe) PURE;
 	STDMETHOD_(BOOL, MarkEventRead)(MCONTACT contactID, MEVENT hDbEvent) PURE;
@@ -130,9 +153,13 @@ interface MIR_APP_EXPORT MIDatabase
 
 	STDMETHOD_(BOOL, Compact)(void) PURE;
 	STDMETHOD_(BOOL, Backup)(LPCWSTR) PURE;
+	
+	STDMETHOD_(MIDatabaseChecker*, GetChecker)(void) PURE;
 
 	STDMETHOD_(MEVENT, GetEventById)(LPCSTR szModule, LPCSTR szId) PURE;
-	STDMETHOD_(BOOL, SetEventId)(LPCSTR szModule, MEVENT, LPCSTR szId) PURE;
+
+	STDMETHOD_(DB::EventCursor*, EventCursor)(MCONTACT hContact, MEVENT hDbEvent) PURE;
+	STDMETHOD_(DB::EventCursor*, EventCursorRev)(MCONTACT hContact, MEVENT hDbEvent) PURE;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -184,6 +211,11 @@ public:
 	
 	STDMETHODIMP_(BOOL) Compact(void) override;
 	STDMETHODIMP_(BOOL) Backup(LPCWSTR) override;
+
+	STDMETHODIMP_(MIDatabaseChecker*) GetChecker(void) override;
+
+	STDMETHODIMP_(DB::EventCursor*) EventCursor(MCONTACT hContact, MEVENT hDbEvent) override;
+	STDMETHODIMP_(DB::EventCursor*) EventCursorRev(MCONTACT hContact, MEVENT hDbEvent) override;
 };
 
 #pragma warning(pop)
@@ -209,9 +241,9 @@ public:
 	STDMETHODIMP_(LONG) GetContactSize(void) override;
 
 	////////////////////////////////////////////////////////////////////////////////////////
-	STDMETHODIMP_(MEVENT) AddEvent(MCONTACT, DBEVENTINFO*) override;
+	STDMETHODIMP_(MEVENT) AddEvent(MCONTACT, const DBEVENTINFO*) override;
 	STDMETHODIMP_(BOOL) DeleteEvent(MEVENT) override;
-	STDMETHODIMP_(BOOL) EditEvent(MCONTACT contactID, MEVENT hDbEvent, DBEVENTINFO *dbe);
+	STDMETHODIMP_(BOOL) EditEvent(MCONTACT contactID, MEVENT hDbEvent, const DBEVENTINFO *dbe) override;
 	STDMETHODIMP_(LONG) GetBlobSize(MEVENT) override;
 	STDMETHODIMP_(BOOL) MarkEventRead(MCONTACT, MEVENT) override;
 	STDMETHODIMP_(MCONTACT) GetEventContact(MEVENT) override;
@@ -230,7 +262,6 @@ public:
 
 	////////////////////////////////////////////////////////////////////////////////////////
 	STDMETHODIMP_(MEVENT) GetEventById(LPCSTR szModule, LPCSTR szId) override;
-	STDMETHODIMP_(BOOL) SetEventId(LPCSTR szModule, MEVENT, LPCSTR szId) override;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -249,8 +280,10 @@ public:
 // makeDatabase() error codes
 #define EMKPRF_CREATEFAILED 1   // for some reason CreateFile() didnt like something
 
-#define MDB_CAPS_COMPACT 0x0001 // database can be compacted
-#define MDB_CAPS_CREATE  0x0002 // new database can be created
+#define MDB_CAPS_CREATE  0x0001 // new database can be created
+#define MDB_CAPS_COMPACT 0x0002 // database can be compacted
+#define MDB_CAPS_CHECK   0x0004 // database can be checked
+
 
 struct DATABASELINK
 {

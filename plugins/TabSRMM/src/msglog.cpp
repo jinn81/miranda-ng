@@ -67,7 +67,7 @@ static wchar_t szToday[22], szYesterday[22];
 char  rtfFontsGlobal[MSGDLGFONTCOUNT + 2][RTFCACHELINESIZE];
 char *rtfFonts;
 
-LOGFONTA logfonts[MSGDLGFONTCOUNT + 2];
+LOGFONTW logfonts[MSGDLGFONTCOUNT + 2];
 COLORREF fontcolors[MSGDLGFONTCOUNT + 2];
 
 #define LOGICON_MSG  0
@@ -110,13 +110,13 @@ void TSAPI CacheLogFonts()
 
 	memset(logfonts, 0, (sizeof(LOGFONTA) * (MSGDLGFONTCOUNT + 2)));
 	for (int i = 0; i < MSGDLGFONTCOUNT; i++) {
-		LoadLogfont(FONTSECTION_IM, i, &logfonts[i], &fontcolors[i], FONTMODULE);
+		LoadMsgDlgFont(FONTSECTION_IM, i, &logfonts[i], &fontcolors[i]);
 		mir_snprintf(rtfFontsGlobal[i], "\\f%u\\cf%u\\b%d\\i%d\\ul%d\\fs%u", i, i, logfonts[i].lfWeight >= FW_BOLD ? 1 : 0, logfonts[i].lfItalic, logfonts[i].lfUnderline, 2 * abs(logfonts[i].lfHeight) * 74 / logPixelSY);
 	}
 	mir_snprintf(rtfFontsGlobal[MSGDLGFONTCOUNT], "\\f%u\\cf%u\\b%d\\i%d\\fs%u", MSGDLGFONTCOUNT, MSGDLGFONTCOUNT, 0, 0, 0);
 
-	wcsncpy(szToday, TranslateT("Today"), 20);
-	wcsncpy(szYesterday, TranslateT("Yesterday"), 20);
+	wcsncpy_s(szToday, TranslateT("Today"), _TRUNCATE);
+	wcsncpy_s(szYesterday, TranslateT("Yesterday"), _TRUNCATE);
 	szToday[19] = szYesterday[19] = 0;
 
 	// cache/create the info panel fonts
@@ -125,10 +125,10 @@ void TSAPI CacheLogFonts()
 			DeleteObject(CInfoPanel::m_ipConfig.hFonts[i]);
 
 		COLORREF clr;
-		LOGFONTA lf;
-		LoadLogfont(FONTSECTION_IP, i, &lf, &clr, FONTMODULE);
+		LOGFONTW lf;
+		LoadMsgDlgFont(FONTSECTION_IP, i, &lf, &clr);
 		lf.lfUnderline = 0;
-		CInfoPanel::m_ipConfig.hFonts[i] = CreateFontIndirectA(&lf);
+		CInfoPanel::m_ipConfig.hFonts[i] = CreateFontIndirectW(&lf);
 		CInfoPanel::m_ipConfig.clrs[i] = clr;
 	}
 
@@ -309,14 +309,14 @@ static int AppendUnicodeToBuffer(CMStringA &str, const wchar_t *line, int mode)
 static void Build_RTF_Header(CMStringA &str, CMsgDialog *dat)
 {
 	int i;
-	LOGFONTA *logFonts = dat->m_pContainer->m_theme.logFonts;
+	LOGFONTW *logFonts = dat->m_pContainer->m_theme.logFonts;
 	COLORREF *fontColors = dat->m_pContainer->m_theme.fontColors;
 	TLogTheme *theme = &dat->m_pContainer->m_theme;
 
 	str.Append("{\\rtf1\\ansi\\deff0{\\fonttbl");
 
 	for (i = 0; i < MSGDLGFONTCOUNT; i++)
-		str.AppendFormat("{\\f%u\\fnil\\fcharset%u %s;}", i, logFonts[i].lfCharSet, logFonts[i].lfFaceName);
+		str.AppendFormat("{\\f%u\\fnil\\fcharset%u %S;}", i, logFonts[i].lfCharSet, logFonts[i].lfFaceName);
 	str.AppendFormat("{\\f%u\\fnil\\fcharset%u %s;}", MSGDLGFONTCOUNT, logFonts[i].lfCharSet, "Arial");
 
 	str.Append("}{\\colortbl ");
@@ -468,7 +468,8 @@ static char* Template_CreateRTFFromDbEvent(CMsgDialog *dat, MCONTACT hContact, M
 
 	CMStringA str;
 
-	if (dat->m_isAutoRTL & 2) {                                     // means: last \\par was deleted to avoid new line at end of log
+	// means: last \\par was deleted to avoid new line at end of log
+	if (dat->m_isAutoRTL & 2) {
 		str.Append("\\par");
 		dat->m_isAutoRTL &= ~2;
 	}
@@ -1206,11 +1207,6 @@ void CLogWindow::LogEvents(MEVENT hDbEventFirst, int count, bool fAppend)
 	LogEvents(hDbEventFirst, count, fAppend, nullptr);
 }
 
-void CLogWindow::LogEvents(DBEVENTINFO *dbei, bool bAppend)
-{
-	LogEvents(0, 1, bAppend, dbei);
-}
-
 void CLogWindow::LogEvents(MEVENT hDbEventFirst, int count, bool fAppend, DBEVENTINFO *dbei_s)
 {
 	CHARRANGE oldSel, sel;
@@ -1273,10 +1269,8 @@ void CLogWindow::LogEvents(MEVENT hDbEventFirst, int count, bool fAppend, DBEVEN
 
 	// begin to draw
 	m_rtf.SendMsg(WM_SETREDRAW, FALSE, 0);
-
 	m_rtf.SendMsg(EM_STREAMIN, fAppend ? SFF_SELECTION | SF_RTF : SFF_SELECTION | SF_RTF, (LPARAM)&stream);
-	m_rtf.SendMsg(EM_EXSETSEL, 0, (LPARAM)&oldSel);
-	m_rtf.SendMsg(EM_HIDESELECTION, FALSE, 0);
+
 	m_pDlg.m_hDbEventLast = streamData.hDbEventLast;
 
 	if (m_pDlg.m_isAutoRTL & 1)
@@ -1308,8 +1302,13 @@ void CLogWindow::LogEvents(MEVENT hDbEventFirst, int count, bool fAppend, DBEVEN
 	ReplaceIcons(startAt, fAppend, isSent);
 	m_pDlg.m_bClrAdded = false;
 
-	int len = GetWindowTextLength(m_rtf.GetHwnd())-1;
-	m_rtf.SendMsg(EM_SETSEL, len, len);
+ 	if (!m_pDlg.m_bScrollingDisabled) {
+		int len = GetWindowTextLength(m_rtf.GetHwnd()) - 1;
+		m_rtf.SendMsg(EM_SETSEL, len, len);
+	}
+	else m_rtf.SendMsg(EM_EXSETSEL, 0, (LPARAM)&oldSel);
+	
+	m_rtf.SendMsg(EM_HIDESELECTION, FALSE, 0);
 
 	m_rtf.SendMsg(WM_SETREDRAW, TRUE, 0);
 	InvalidateRect(m_rtf.GetHwnd(), nullptr, FALSE);

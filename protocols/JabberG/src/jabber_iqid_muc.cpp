@@ -50,7 +50,7 @@ void CJabberProto::OnIqResultGetMuc(const TiXmlElement *iqNode, CJabberIqInfo*)
 	if (!mir_strcmp(type, "result"))
 		if (auto *queryNode = XmlGetChildByTag(iqNode, "query", "xmlns", JABBER_FEAT_MUC_OWNER))
 			if (auto *xNode = XmlGetChildByTag(queryNode, "x", "xmlns", JABBER_FEAT_DATA_FORMS))
-				(new CJabberFormDlg(this, xNode, "Jabber Conference Room Configuration", &CJabberProto::SetMucConfig, mir_strdup(from)))->Display();
+				(new CJabberFormDlg(this, xNode, LPGEN("Conference Room Configuration"), &CJabberProto::SetMucConfig, mir_strdup(from)))->Display();
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -210,16 +210,12 @@ public:
 		return true;
 	}
 
-	bool OnClose() override
-	{
-		FreeList();
-		m_proto->GetMucDlg(m_info->type) = nullptr;
-		return true;
-	}
-
 	void OnDestroy() override
 	{
 		Utils_SaveWindowPosition(m_hwnd, 0, m_proto->m_szModuleName, "jidListWnd_");
+
+		FreeList();
+		m_proto->GetMucDlg(m_info->type) = nullptr;
 	}
 
 	INT_PTR DlgProc(UINT uMsg, WPARAM wParam, LPARAM lParam) override

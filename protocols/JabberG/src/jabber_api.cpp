@@ -115,25 +115,25 @@ void CJabberProto::ExternalTempIqHandler(const TiXmlElement *node, CJabberIqInfo
 	free(d); // free IqHandlerData allocated in CJabberProto::AddIqHandler below
 }
 
-BOOL CJabberProto::ExternalIqHandler(const TiXmlElement *node, CJabberIqInfo *pInfo)
+bool CJabberProto::ExternalIqHandler(const TiXmlElement *node, CJabberIqInfo *pInfo)
 {
 	sHandlerData *d = (sHandlerData*)pInfo->GetUserData();
 	return d->Func(this, node, d->pUserData);
 }
 
-BOOL CJabberProto::ExternalMessageHandler(const TiXmlElement *node, ThreadData*, CJabberMessageInfo* pInfo)
+bool CJabberProto::ExternalMessageHandler(const TiXmlElement *node, ThreadData*, CJabberMessageInfo* pInfo)
 {
 	sHandlerData *d = (sHandlerData*)pInfo->GetUserData();
 	return d->Func(this, node, d->pUserData);
 }
 
-BOOL CJabberProto::ExternalPresenceHandler(const TiXmlElement *node, ThreadData*, CJabberPresenceInfo* pInfo)
+bool CJabberProto::ExternalPresenceHandler(const TiXmlElement *node, ThreadData*, CJabberPresenceInfo* pInfo)
 {
 	sHandlerData *d = (sHandlerData*)pInfo->GetUserData();
 	return d->Func(this, node, d->pUserData);
 }
 
-BOOL CJabberProto::ExternalSendHandler(const TiXmlElement *node, ThreadData*, CJabberSendInfo* pInfo)
+bool CJabberProto::ExternalSendHandler(const TiXmlElement *node, ThreadData*, CJabberSendInfo* pInfo)
 {
 	sHandlerData *d = (sHandlerData*)pInfo->GetUserData();
 	return d->Func(this, node, d->pUserData);
@@ -226,7 +226,7 @@ int CJabberProto::RegisterFeature(const char *szFeature, const char *szDescripti
 			if (wcschr(L"bcdfghjklmnpqrstvwxz0123456789", *pSrc))
 				*pDst++ = *pSrc;
 		*pDst = 0;
-		m_clientCapsManager.SetOwnCaps(JABBER_CAPS_MIRANDA_NODE, szExt, jcb);
+		g_clientCapsManager.SetClientCaps(JABBER_CAPS_MIRANDA_NODE, m_szFeaturesCrc, szExt, jcb);
 
 		fcp = new JabberFeatCapPairDynamic();
 		fcp->szExt = szExt; // will be deallocated along with other values of JabberFeatCapPairDynamic in CJabberProto destructor

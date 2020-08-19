@@ -34,7 +34,9 @@ void CJabberProto::AddContactToRoster(const char *jid, const char *nick, const c
 {
 	XmlNodeIq iq("set", SerialNext());
 	TiXmlElement *query = iq << XQUERY(JABBER_FEAT_IQ_ROSTER)
-		<< XCHILD("item") << XATTR("jid", jid) << XATTR("name", nick);
+		<< XCHILD("item") << XATTR("jid", jid);
+	if (nick && !m_bIgnoreRoster) 
+		query << XATTR("name", nick);
 	if (grpName)
 		query << XCHILD("group", grpName);
 	m_ThreadInfo->send(iq);
@@ -48,16 +50,14 @@ void CJabberProto::DBAddAuthRequest(const char *jid, const char *nick)
 	MCONTACT hContact = DBCreateContact(jid, nick, true, true);
 	Contact_Hide(hContact, false);
 
-	DB_AUTH_BLOB blob(hContact, nick, nullptr, nullptr, jid, nullptr);
+	DB::AUTH_BLOB blob(hContact, nick, nullptr, nullptr, jid, nullptr);
 
-	DBEVENTINFO dbei = {};
-	dbei.szModule = m_szModuleName;
-	dbei.timestamp = (DWORD)time(0);
-	dbei.flags = DBEF_UTF;
-	dbei.eventType = EVENTTYPE_AUTHREQUEST;
-	dbei.cbBlob = blob.size();
-	dbei.pBlob = blob;
-	db_event_add(0, &dbei);
+	PROTORECVEVENT pre = {};
+	pre.timestamp = (DWORD)time(0);
+	pre.lParam = blob.size();
+	pre.szMessage = blob;
+	ProtoChainRecv(hContact, PSR_AUTH, 0, (LPARAM)&pre);
+
 	debugLogA("Setup DBAUTHREQUEST with nick='%s' jid='%s'", blob.get_nick(), blob.get_email());
 }
 
@@ -98,10 +98,10 @@ MCONTACT CJabberProto::DBCreateContact(const char *jid, const char *nick, bool t
 	return hNewContact;
 }
 
-BOOL CJabberProto::AddDbPresenceEvent(MCONTACT hContact, BYTE btEventType)
+bool CJabberProto::AddDbPresenceEvent(MCONTACT hContact, BYTE btEventType)
 {
 	if (!hContact)
-		return FALSE;
+		return false;
 
 	switch (btEventType) {
 	case JABBER_DB_EVENT_PRESENCE_SUBSCRIBE:
@@ -109,12 +109,12 @@ BOOL CJabberProto::AddDbPresenceEvent(MCONTACT hContact, BYTE btEventType)
 	case JABBER_DB_EVENT_PRESENCE_UNSUBSCRIBE:
 	case JABBER_DB_EVENT_PRESENCE_UNSUBSCRIBED:
 		if (!m_bLogPresence)
-			return FALSE;
+			return false;
 		break;
 
 	case JABBER_DB_EVENT_PRESENCE_ERROR:
 		if (!m_bLogPresenceErrors)
-			return FALSE;
+			return false;
 		break;
 	}
 
@@ -126,8 +126,7 @@ BOOL CJabberProto::AddDbPresenceEvent(MCONTACT hContact, BYTE btEventType)
 	dbei.timestamp = time(0);
 	dbei.szModule = m_szModuleName;
 	db_event_add(hContact, &dbei);
-
-	return TRUE;
+	return true;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -135,11 +134,9 @@ BOOL CJabberProto::AddDbPresenceEvent(MCONTACT hContact, BYTE btEventType)
 
 void CJabberProto::GetAvatarFileName(MCONTACT hContact, wchar_t* pszDest, size_t cbLen)
 {
-	int tPathLen = mir_snwprintf(pszDest, cbLen, L"%s\\%S", VARSW(L"%miranda_avatarcache%").get(), m_szModuleName);
+	size_t tPathLen = mir_snwprintf(pszDest, cbLen, L"%s\\%S", VARSW(L"%miranda_avatarcache%").get(), m_szModuleName);
 
-	DWORD dwAttributes = GetFileAttributes(pszDest);
-	if (dwAttributes == 0xffffffff || (dwAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
-		CreateDirectoryTreeW(pszDest);
+	CreateDirectoryTreeW(pszDest);
 
 	pszDest[tPathLen++] = '\\';
 
@@ -440,48 +437,116 @@ void CJabberProto::MsgPopup(MCONTACT hContact, const wchar_t *szMsg, const wchar
 	Popup_AddClass(&ppd);
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////
+
+static const TiXmlElement* XmlFindChildRecursively(const TiXmlElement *p, const char *elem)
+{
+	if (auto *res = XmlFirstChild(p, elem))
+		return res;
+
+	for (auto *n : TiXmlEnum(p))
+		if (auto *res = XmlFindChildRecursively(n, elem))
+			return res;
+
+	return nullptr;
+}
+
+static bool SaveBlobToFile(const wchar_t *pwszFileName, const CMStringA &body)
+{
+	HANDLE h = CreateFile(pwszFileName, GENERIC_READ | GENERIC_WRITE,
+		FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, CREATE_ALWAYS,
+		FILE_ATTRIBUTE_NORMAL, nullptr);
+	if (h == INVALID_HANDLE_VALUE)
+		return false;
+
+	DWORD n;
+	size_t bufferLen;
+	ptrA buffer((char *)mir_base64_decode(body, &bufferLen));
+	WriteFile(h, buffer, (DWORD)bufferLen, &n, nullptr);
+	CloseHandle(h);
+	return true;
+}
+
+void CJabberProto::OnGetBob(const TiXmlElement *node, CJabberIqInfo *pReq)
+{
+	auto pMark = ((CChatMark *)pReq->GetUserData());
+	if (pMark) {
+		XmlNode reply("message"); reply << XATTR("to", pMark->szFrom) << XATTR("id", pMark->szId)
+			<< XCHILDNS("displayed", JABBER_FEAT_CHAT_MARKERS) << XATTR("id", pMark->szId);
+		m_ThreadInfo->send(reply);
+		
+		delete pMark;
+	}
+
+	if (auto *data = XmlFirstChild(node, "data")) {
+		if (auto *cid = XmlGetAttr(data, "cid")) {
+			if (auto *src = data->GetText()) {
+				VARSW wszTempPath(L"%miranda_userdata%\\JabberTmp");
+				CreateDirectoryTreeW(wszTempPath);
+
+				const wchar_t *pwszExt = L".bin";
+				if (auto *pszType = XmlGetAttr(data, "type"))
+					pwszExt = ProtoGetAvatarExtension(ProtoGetAvatarFormatByMimeType(pszType));
+
+				CMStringA szHash = CMStringA(cid).Mid(5, 40);
+				CMStringW wszFileName(FORMAT, L"%s\\%S%s", wszTempPath.get(), szHash.c_str(), pwszExt);
+				SaveBlobToFile(wszFileName, src);
+
+				wszFileName.Insert(0, L"[img]"); wszFileName.Append(L"[/img]");
+				T2Utf szMsg(wszFileName);
+				PROTORECVEVENT pre = {};
+				pre.timestamp = time(0);
+				pre.szMessage = szMsg;
+				ProtoChainRecvMsg(pReq->GetHContact(), &pre);
+			}
+		}
+	}
+}
+
 CMStringA CJabberProto::ExtractImage(const TiXmlElement *node)
 {
-	const TiXmlElement *nHtml, *nBody, *nImg;
-	const char *src;
 	CMStringA link;
 
-	if ((nHtml = XmlFirstChild(node, "html")) != nullptr &&
-		(nBody = XmlFirstChild(nHtml, "body")) != nullptr &&
-		(nImg = XmlFirstChild(nBody, "img")) != nullptr &&
-		(src = XmlGetAttr(nImg, "src")) != nullptr) {
+	if (auto *nHtml = XmlFirstChild(node, "html")) {
+		if (auto *nBody = XmlFirstChild(nHtml, "body")) {
+			if (auto *nImg = XmlFindChildRecursively(nBody, "img")) {
+				if (auto *src = XmlGetAttr(nImg, "src")) {
+					CMStringA strSrc(src);
 
-		CMStringA strSrc(src);
-		if (strSrc.Left(11).Compare("data:image/") == 0) {
-			int end = strSrc.Find(';');
-			if (end != -1) {
-				CMStringW ext(strSrc.c_str() + 11, end - 11);
-				int comma = strSrc.Find(L',', end);
-				if (comma != -1) {
-					CMStringA image(strSrc.c_str() + comma + 1, strSrc.GetLength() - comma - 1);
-					image.Replace("%2B", "+");
-					image.Replace("%2F", "/");
-					image.Replace("%3D", "=");
+					// direct inline
+					if (strSrc.Left(11).Compare("data:image/") == 0) {
+						int end = strSrc.Find(';');
+						if (end != -1) {
+							CMStringW ext(strSrc.c_str() + 11, end - 11);
+							int comma = strSrc.Find(L',', end);
+							if (comma != -1) {
+								CMStringA image(strSrc.c_str() + comma + 1, strSrc.GetLength() - comma - 1);
+								image.Replace("%2B", "+");
+								image.Replace("%2F", "/");
+								image.Replace("%3D", "=");
 
-					wchar_t tszTempPath[MAX_PATH], tszTempFile[MAX_PATH];
-					GetTempPath(_countof(tszTempPath), tszTempPath);
-					GetTempFileName(tszTempPath, L"jab", InterlockedIncrement(&g_nTempFileId), tszTempFile);
-					wcsncat_s(tszTempFile, L".", 1);
-					wcsncat_s(tszTempFile, ext, ext.GetLength());
+								wchar_t tszTempPath[MAX_PATH], tszTempFile[MAX_PATH];
+								GetTempPath(_countof(tszTempPath), tszTempPath);
+								GetTempFileName(tszTempPath, L"jab", InterlockedIncrement(&g_nTempFileId), tszTempFile);
+								wcsncat_s(tszTempFile, L".", 1);
+								wcsncat_s(tszTempFile, ext, ext.GetLength());
 
-					HANDLE h = CreateFile(tszTempFile, GENERIC_READ | GENERIC_WRITE,
-						FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, CREATE_ALWAYS,
-						FILE_ATTRIBUTE_NORMAL, nullptr);
+								if (SaveBlobToFile(tszTempFile, image))
+									link.AppendFormat(" file://%s", T2Utf(tszTempFile).get());
+							}
+						}
+					}
 
-					if (h != INVALID_HANDLE_VALUE) {
-						DWORD n;
-						size_t bufferLen;
-						ptrA buffer((char*)mir_base64_decode(image, &bufferLen));
-						WriteFile(h, buffer, (DWORD)bufferLen, &n, nullptr);
-						CloseHandle(h);
+					// XEP-0231: Bits Of Bytes
+					else if (strSrc.Left(9) == "cid:sha1+" && strSrc.Right(13) == "@bob.xmpp.org") {
+						auto *szMsgId = XmlGetAttr(node, "id"), *szFrom = XmlGetAttr(node, "from");
+						auto *pMark = (szMsgId && szFrom) ? new CChatMark(0, szMsgId, szFrom) : nullptr;
 
-						link = " file:///";
-						link += T2Utf(tszTempFile);
+						auto *pIQ = AddIQ(&CJabberProto::OnGetBob, JABBER_IQ_TYPE_GET, XmlGetAttr(node, "from"), pMark);
+						pIQ->SetParamsToParse(JABBER_IQ_PARSE_HCONTACT);
+
+						strSrc.Delete(0, 4);
+						m_ThreadInfo->send(XmlNodeIq(pIQ) << XCHILDNS("data", JABBER_FEAT_BITS) << XATTR("cid", strSrc));
 					}
 				}
 			}

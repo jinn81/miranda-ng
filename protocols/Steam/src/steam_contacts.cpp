@@ -216,7 +216,7 @@ void CSteamProto::UpdateContactDetails(MCONTACT hContact, const JSONNode &data)
 			if (!gameId)
 				message.Append(TranslateT(" (Non-Steam)"));
 			if (!serverIP.empty())
-				message.AppendFormat(TranslateT(" on server %s"), serverIP.c_str());
+				message.AppendFormat(TranslateT(" on server %S"), serverIP.c_str());
 		}
 
 		setDword(hContact, "XStatusId", gameId);
@@ -294,26 +294,20 @@ void CSteamProto::ContactIsAskingAuth(MCONTACT hContact)
 		return;
 
 	// create auth request event
-	ptrA steamId(getStringA(hContact, "SteamID"));
-	ptrA token(getStringA("TokenSecret"));
-	SendRequest(new GetUserSummariesRequest(token, steamId), &CSteamProto::OnGotUserSummaries);
+	ptrA steamId(getUStringA(hContact, "SteamID"));
+	SendRequest(new GetUserSummariesRequest(this, steamId), &CSteamProto::OnGotUserSummaries);
 
-	ptrA nickName(getStringA(hContact, "Nick"));
+	ptrA nickName(getUStringA(hContact, "Nick"));
 	if (nickName == nullptr)
 		nickName = mir_strdup(steamId);
 
-	ptrA firstName(getStringA(hContact, "FirstName"));
-	if (firstName == nullptr)
-		firstName = mir_strdup("");
-
-	ptrA lastName(getStringA(hContact, "LastName"));
-	if (lastName == nullptr)
-		lastName = mir_strdup("");
+	ptrA firstName(getUStringA(hContact, "FirstName"));
+	ptrA lastName(getUStringA(hContact, "LastName"));
 
 	char reason[MAX_PATH];
 	mir_snprintf(reason, Translate("%s has added you to contact list"), nickName.get());
 
-	DB_AUTH_BLOB blob(hContact, nickName, firstName, lastName, steamId, reason);
+	DB::AUTH_BLOB blob(hContact, nickName, firstName, lastName, steamId, reason);
 
 	PROTORECVEVENT recv = { 0 };
 	recv.timestamp = now();
@@ -443,13 +437,11 @@ void CSteamProto::OnGotFriendList(const JSONNode &root, void *)
 	}
 	friendsMap.clear();
 
-	ptrA token(getStringA("TokenSecret"));
-
 	if (!steamIds.empty())
-		PushRequest(new GetUserSummariesRequest(token, steamIds.c_str()), &CSteamProto::OnGotUserSummaries);
+		PushRequest(new GetUserSummariesRequest(this, steamIds.c_str()), &CSteamProto::OnGotUserSummaries);
 
 	// Load last conversations
-	PushRequest(new GetConversationsRequest(token), &CSteamProto::OnGotConversations);
+	PushRequest(new GetConversationsRequest(this), &CSteamProto::OnGotConversations);
 }
 
 void CSteamProto::OnGotBlockList(const JSONNode &root, void *)
@@ -736,6 +728,5 @@ void CSteamProto::OnSearchByNameStarted(const HttpResponse &response, void *arg)
 	// remove trailing ","
 	steamIds.pop_back();
 
-	ptrA token(getStringA("TokenSecret"));
-	PushRequest(new GetUserSummariesRequest(token, steamIds.c_str()), &CSteamProto::OnSearchResults, (HANDLE)arg);
+	PushRequest(new GetUserSummariesRequest(this, steamIds.c_str()), &CSteamProto::OnSearchResults, (HANDLE)arg);
 }

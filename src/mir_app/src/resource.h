@@ -1,6 +1,6 @@
 //{{NO_DEPENDENCIES}}
 // Microsoft Visual C++ generated include file.
-// Used by resource.rc
+// Used by w:\miranda-ng\src\mir_app\res\resource.rc
 //
 #define IDC_AUTHICON                    1
 #define IDC_NOTOALL                     3
@@ -18,13 +18,15 @@
 #define IDD_OPT_PROTOCOLORDER           109
 #define IDD_OPT_ICOLIB                  110
 #define IDD_ICOLIB_IMPORT               111
-#define IDD_OPT_SRMMLOG						 112
+#define IDD_OPT_SRMMLOG                 112
 #define IDI_LOADED_GRAY                 113
 #define IDI_NOTLOADED_GRAY              114
 #define IDD_ADDED                       115
 #define IDD_ENTER_STRING                116
 #define IDI_ADDGROUP                    117
 #define IDD_EMPTY                       118
+#define IDD_OPT_CLIST                   119
+#define IDD_OPT_CHAT_EVENTS             120
 #define IDD_AUTHREQ                     121
 #define IDD_DETAILS                     125
 #define IDD_HISTORY                     127
@@ -162,6 +164,7 @@
 #define IDI_AUTH_GRANT                  325
 #define IDI_AUTH_REQUEST                326
 #define IDI_AUTH_REVOKE                 327
+#define IDI_SOUND                       328
 #define IDI_ONTHEPHONE                  1002
 #define IDC_MESSAGE                     1002
 #define IDC_LANGINFOFRAME               1002
@@ -187,6 +190,7 @@
 #define IDC_LANGDATE                    1010
 #define IDC_LNK_ADDONS                  1011
 #define IDC_RELOAD                      1011
+#define IDC_HIDEOFFLINEOPTS             1012
 #define IDC_SPECIFYPORTS                1013
 #define IDC_ST_ENTERMSG                 1013
 #define IDC_ST_ENTERURL                 1014
@@ -208,9 +212,12 @@
 #define IDC_CHK_FORCEDEFAULT            1027
 #define IDC_ED_NAME                     1028
 #define IDC_ED_DEFAULT                  1029
+#define IDC_REMOVETEMP                  1030
 #define IDC_SHOWNAMES                   1031
 #define IDC_ABOUT                       1032
 #define IDC_MYNOTES                     1033
+#define IDC_TRAYONLYFORINACTIVE         1034
+#define IDC_POPUPONLYFORINACTIVE        1035
 #define IDC_URLS                        1037
 #define IDC_COLORTEXT                   1038
 #define IDC_REPLY                       1039
@@ -218,6 +225,7 @@
 #define IDC_URL                         1041
 #define IDC_FONTGROUP                   1042
 #define IDC_TXT_SIMPLE                  1043
+#define IDC_DISABLEICONBLINK            1044
 #define IDC_BTN_RESET                   1045
 #define IDC_REASON                      1046
 #define IDC_BTN_UNDO                    1047
@@ -255,6 +263,10 @@
 #define IDC_TIMEZONESELECT              1071
 #define IDC_MOREOPTIONS                 1071
 #define IDC_USERMENU                    1071
+#define IDC_HIDEOFFLINE                 1072
+#define IDC_HIDEEMPTYGROUPS             1073
+#define IDC_USEGROUPS                   1074
+#define IDC_CONFIRMDELETE               1075
 #define IDC_SLOT_L                      1075
 #define IDC_SLOT                        1076
 #define IDC_MAX_ICONS_L                 1077
@@ -269,6 +281,10 @@
 #define IDC_GENMENU_CUSTOMNAME          1086
 #define IDC_GENMENU_SET                 1087
 #define IDC_GENMENU_DEFAULT             1089
+#define IDC_ICON1                       1090
+#define IDC_ICON2                       1091
+#define IDC_ICON3                       1092
+#define IDC_ICON4                       1093
 #define IDC_CANVAS                      1094
 #define IDC_CANVAS2                     1095
 #define IDC_TXT_MULTILINE               1096
@@ -529,7 +545,6 @@
 #define IDC_TXT_INFO                    1722
 #define IDC_CONTACTNAME                 1724
 #define IDC_FRAME                       1725
-#define IDC_LST_STATUS                  1726
 #define IDC_ALLPRECENTS                 1727
 #define IDC_ENABLE_KEYWORDFILTERING     1729
 #define IDC_BKGCOLOUR_STATIC            1730
@@ -551,6 +566,64 @@
 #define IDC_EFFECT_COLOUR_TEXT1         1853
 #define IDC_EFFECT_COLOUR_SPIN1         1854
 #define IDC_EXTRAORDER                  1889
+#define IDC_1                           4200
+#define IDC_2                           4201
+#define IDC_3                           4202
+#define IDC_4                           4203
+#define IDC_5                           4204
+#define IDC_6                           4205
+#define IDC_7                           4206
+#define IDC_8                           4207
+#define IDC_9                           4208
+#define IDC_10                          4209
+#define IDC_11                          4210
+#define IDC_P1                          4300
+#define IDC_P2                          4301
+#define IDC_P3                          4302
+#define IDC_P4                          4303
+#define IDC_P5                          4304
+#define IDC_P6                          4305
+#define IDC_P7                          4306
+#define IDC_P8                          4307
+#define IDC_P9                          4308
+#define IDC_P10                         4309
+#define IDC_P11                         4310
+#define IDC_P12                         4311
+#define IDC_T1                          4400
+#define IDC_T2                          4401
+#define IDC_T3                          4402
+#define IDC_T4                          4403
+#define IDC_T5                          4404
+#define IDC_T6                          4405
+#define IDC_T7                          4406
+#define IDC_T8                          4407
+#define IDC_T9                          4408
+#define IDC_T10                         4409
+#define IDC_T11                         4410
+#define IDC_T12                         4411
+#define IDC_L1                          4500
+#define IDC_L2                          4501
+#define IDC_L3                          4502
+#define IDC_L4                          4503
+#define IDC_L5                          4504
+#define IDC_L6                          4505
+#define IDC_L7                          4506
+#define IDC_L8                          4507
+#define IDC_L9                          4508
+#define IDC_L10                         4509
+#define IDC_L11                         4510
+#define IDC_S1                          4600
+#define IDC_S2                          4601
+#define IDC_S3                          4602
+#define IDC_S4                          4603
+#define IDC_S5                          4604
+#define IDC_S6                          4605
+#define IDC_S7                          4606
+#define IDC_S8                          4607
+#define IDC_S9                          4608
+#define IDC_S10                         4609
+#define IDC_S11                         4610
+#define IDC_S12                         4611
 #define IDC_EFFECT_COLOUR_TEXT2         11803
 #define IDC_EFFECT_COLOUR_SPIN2         11806
 #define IDI_SEARCHALL                   32548
@@ -596,9 +669,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        330
+#define _APS_NEXT_RESOURCE_VALUE        332
 #define _APS_NEXT_COMMAND_VALUE         40018
-#define _APS_NEXT_CONTROL_VALUE         1748
+#define _APS_NEXT_CONTROL_VALUE         1749
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

@@ -26,54 +26,51 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "stdafx.h"
 
-#define IDI_ONLINE                      104
-#define IDI_OFFLINE                     105
-#define IDI_AWAY                        128
-#define IDI_FREE4CHAT                   129
-#define IDI_INVISIBLE                   130
-#define IDI_NA                          131
-#define IDI_DND                         158
-#define IDI_OCCUPIED                    159
+#define IDI_ONLINE     104
+#define IDI_OFFLINE    105
+#define IDI_AWAY       128
+#define IDI_FREE4CHAT  129
+#define IDI_INVISIBLE  130
+#define IDI_NA         131
+#define IDI_DND        158
+#define IDI_OCCUPIED   159
 
 HIMAGELIST hAdvancedStatusIcon = nullptr;
 
-struct CTransportProtoTableItem
+struct
 {
 	char *mask;
 	char*  proto;
-};
-
-static CTransportProtoTableItem TransportProtoTable[] =
+}
+static TransportProtoTable[] =
 {
-	{ "|*icq*|jit*",     "ICQ" },
-	{ "msn*",            "MSN" },
-	{ "yahoo*",          "YAHOO" },
-	{ "mrim*",           "MRA" },
-	{ "aim*",            "AIM" },
+	{ "|*icq*|jit*", "ICQ" },
+	{ "mrim*",       "MRA" },
+
 	//request #3094
-	{ "|gg*|gadu*",      "GaduGadu" },
-	{ "tv*",             "TV" },
-	{ "dict*",           "Dictionary" },
-	{ "weather*",        "Weather" },
-	{ "skype*",          "Skype" },
-	{ "sms*",            "SMS" },
-	{ "smtp*",           "SMTP" },
+	{ "|gg*|gadu*",  "GaduGadu" },
+	{ "tv*",         "TV" },
+	{ "dict*",       "Dictionary" },
+	{ "weather*",    "Weather" },
+	{ "skype*",      "Skype" },
+	{ "sms*",        "SMS" },
+	{ "smtp*",       "SMTP" },
+
 	//j2j
-	{ "gtalk.*.*",       "GTalk" },
-	{ "|xmpp.*.*|j2j.*.*","Jabber2Jabber" },
+	{ "gtalk.*.*",   "GTalk" },
+	{ "j2j.*.*",     "Jabber2Jabber" },
+
 	//jabbim.cz - services
-	{ "disk*",           "Jabber Disk" },
-	{ "irc*",            "IRC" },
-	{ "rss*",            "RSS" },
-	{ "tlen*",           "Tlen" },
+	{ "disk*",       "Jabber Disk" },
+	{ "irc*",        "IRC" },
+	{ "rss*",        "RSS" },
+	{ "tlen*",       "Tlen" },
 
 	// German social networks
-	{ "studivz*",        "StudiVZ" },
-	{ "schuelervz*",     "SchuelerVZ" },
-	{ "meinvz*",         "MeinVZ" },
+	{ "studivz*",    "StudiVZ" },
+	{ "schuelervz*", "SchuelerVZ" },
+	{ "meinvz*",     "MeinVZ" }
 };
-
-static int skinIconStatusToResourceId[] = { IDI_OFFLINE, IDI_ONLINE, IDI_AWAY, IDI_DND, IDI_NA, IDI_NA, IDI_OCCUPIED, IDI_FREE4CHAT, IDI_INVISIBLE };
 
 ///////////////////////////////////////////////////////////////////////////////
 // CIconPool class
@@ -124,7 +121,6 @@ void CIconPool::RegisterIcon(const char *name, wchar_t *filename, int iconid, wc
 	sid.flags = SIDF_ALL_UNICODE;
 	sid.iDefaultIndex = iconid;
 	item->m_hIcolibItem = IcoLib_AddIcon(&sid, &g_plugin);
-
 	m_items.insert(item);
 }
 
@@ -152,7 +148,7 @@ HICON CIconPool::GetIcon(const char *name, bool big)
 	return nullptr;
 }
 
-CIconPool::CPoolItem *CIconPool::FindItemByName(const char *name)
+CIconPool::CPoolItem* CIconPool::FindItemByName(const char *name)
 {
 	CPoolItem item;
 	item.m_name = mir_strdup(name);
@@ -197,13 +193,13 @@ static bool MatchMask(const char *name, const char *mask)
 	return false;
 }
 
-static HICON ExtractIconFromPath(const char *path, BOOL * needFree)
+static HICON ExtractIconFromPath(const char *path, BOOL *needFree)
 {
 	char file[MAX_PATH], fileFull[MAX_PATH];
 	mir_strncpy(file, path, sizeof(file));
 
 	int n;
-	char* comma = strrchr(file, ',');
+	char *comma = strrchr(file, ',');
 	if (comma == nullptr) n = 0;
 	else { n = atoi(comma + 1); *comma = 0; }
 	PathToAbsolute(file, fileFull);
@@ -244,26 +240,31 @@ static HICON LoadTransportIcon(char *filename, int i, char *IconName, wchar_t *S
 	return IcoLib_GetIcon(IconName);
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////
+
+static int skinIconStatusToResourceId[] = { IDI_OFFLINE, IDI_ONLINE, IDI_AWAY, IDI_DND, IDI_NA, IDI_NA, IDI_OCCUPIED, IDI_FREE4CHAT, IDI_INVISIBLE };
+
 int CJabberProto::LoadAdvancedIcons(int iID)
 {
 	char *proto = TransportProtoTable[iID].proto;
-	char defFile[MAX_PATH] = { 0 };
-	wchar_t Group[255];
-	char Uname[255];
-	int first = -1;
 	HICON empty = Skin_LoadIcon(SKINICON_OTHER_MIRANDA);
 
+	wchar_t Group[255];
 	mir_snwprintf(Group, LPGENW("Status icons")L"/%s/%S %s", m_tszUserName, proto, TranslateT("transport"));
+
+	char defFile[MAX_PATH] = { 0 };
 	mir_snprintf(defFile, "proto_%s.dll", proto);
 	if (!hAdvancedStatusIcon)
 		hAdvancedStatusIcon = Clist_GetImageList();
 
+	int first = -1;
 	mir_cslock lck(m_csModeMsgMutex);
 	for (int i = 0; i < ID_STATUS_MAX - ID_STATUS_OFFLINE; i++) {
-		BOOL needFree;
-		wchar_t *descr = Clist_GetStatusModeDescription(i + ID_STATUS_OFFLINE, 0);
+		char Uname[255];
 		mir_snprintf(Uname, "%s_Transport_%s_%d", m_szModuleName, proto, i);
-		HICON hicon = LoadTransportIcon(defFile, -skinIconStatusToResourceId[i], Uname, Group, descr, -(i + ID_STATUS_OFFLINE), &needFree);
+
+		BOOL needFree;
+		HICON hicon = LoadTransportIcon(defFile, -skinIconStatusToResourceId[i], Uname, Group, Clist_GetStatusModeDescription(i + ID_STATUS_OFFLINE, 0), -(i + ID_STATUS_OFFLINE), &needFree);
 		int index = (m_transportProtoTableStartIndex[iID] == -1) ? -1 : m_transportProtoTableStartIndex[iID] + i;
 		int added = ImageList_ReplaceIcon(hAdvancedStatusIcon, index, hicon ? hicon : empty);
 		if (first == -1)
@@ -276,6 +277,8 @@ int CJabberProto::LoadAdvancedIcons(int iID)
 		m_transportProtoTableStartIndex[iID] = first;
 	return 0;
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////
 
 int CJabberProto::GetTransportProtoID(char *TransportDomain)
 {
@@ -349,16 +352,16 @@ INT_PTR __cdecl CJabberProto::JGetAdvancedStatusIcon(WPARAM hContact, LPARAM)
 /////////////////////////////////////////////////////////////////////////////////////////
 //   Transport check functions
 
-BOOL CJabberProto::DBCheckIsTransportedContact(const char *jid, MCONTACT hContact)
+bool CJabberProto::DBCheckIsTransportedContact(const char *jid, MCONTACT hContact)
 {
 	// check if transport is already set
 	if (!jid || !hContact)
-		return FALSE;
+		return false;
 
 	// strip domain part from jid
 	char *domain = (char*)strchr(jid, '@');
-	BOOL isAgent = (domain == nullptr) ? TRUE : FALSE;
-	BOOL isTransported = FALSE;
+	bool isAgent = (domain == nullptr);
+	bool isTransported = false;
 	if (domain != nullptr)
 		domain = NEWSTR_ALLOCA(domain + 1);
 	else
@@ -371,7 +374,7 @@ BOOL CJabberProto::DBCheckIsTransportedContact(const char *jid, MCONTACT hContac
 	for (auto &it : TransportProtoTable)
 		if (MatchMask(domain, it.mask)) {
 			GetTransportStatusIconIndex(GetTransportProtoID(domain), ID_STATUS_OFFLINE);
-			isTransported = TRUE;
+			isTransported = true;
 			break;
 		}
 

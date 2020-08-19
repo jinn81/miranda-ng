@@ -71,6 +71,19 @@ CVkProto::CVkProto(const char *szModuleName, const wchar_t *pwszUserName) :
 
 	// Set all contacts offline -- in case we crashed
 	SetAllContactStatuses(ID_STATUS_OFFLINE);
+
+	// Group chats
+	GCREGISTER gcr = {};
+	gcr.ptszDispName = m_tszUserName;
+	gcr.pszModule = m_szModuleName;
+	Chat_Register(&gcr);
+
+	CreateProtoService(PS_MENU_LOADHISTORY, &CVkProto::SvcGetAllServerHistoryForContact);
+
+	CreateProtoService(PS_LEAVECHAT, &CVkProto::OnLeaveChat);
+	CreateProtoService(PS_JOINCHAT, &CVkProto::OnJoinChat);
+	HookProtoEvent(ME_GC_EVENT, &CVkProto::OnChatEvent);
+	HookProtoEvent(ME_GC_BUILDMENU, &CVkProto::OnGcMenuHook);
 }
 
 CVkProto::~CVkProto()
@@ -88,17 +101,6 @@ void CVkProto::OnModulesLoaded()
 {
 	Clist_GroupCreate(0, m_vkOptions.pwszDefaultGroup);
 
-	// Chats
-	GCREGISTER gcr = {};
-	gcr.ptszDispName = m_tszUserName;
-	gcr.pszModule = m_szModuleName;
-	Chat_Register(&gcr);
-
-	CreateProtoService(PS_LEAVECHAT, &CVkProto::OnLeaveChat);
-	CreateProtoService(PS_JOINCHAT, &CVkProto::OnJoinChat);
-	HookProtoEvent(ME_GC_EVENT, &CVkProto::OnChatEvent);
-	HookProtoEvent(ME_GC_BUILDMENU, &CVkProto::OnGcMenuHook);
-
 	// Other hooks
 	HookProtoEvent(ME_MSG_WINDOWEVENT, &CVkProto::OnProcessSrmmEvent);
 	HookProtoEvent(ME_DB_EVENT_MARKED_READ, &CVkProto::OnDbEventRead);
@@ -110,9 +112,24 @@ void CVkProto::OnModulesLoaded()
 	InitPopups();
 	InitMenus();
 	InitDBCustomEvents();
+	InitSmileys();
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
+
+void CVkProto::InitSmileys()
+{
+	if (!m_vkOptions.bStikersAsSmileys)
+		return;
+
+	if (m_vkOptions.bUseStikersAsStaticSmileys)
+		return;
+
+	CMStringW wszPath(FORMAT, L"%s\\%S\\Stickers\\*.png", VARSW(L"%miranda_avatarcache%").get(), m_szModuleName);
+	SMADD_CONT cont = { 2, m_szModuleName, wszPath };
+	CallService(MS_SMILEYADD_LOADCONTACTSMILEYS, 0, LPARAM(&cont));
+}
+
 // Menu support
 
 void CVkProto::OnBuildProtoMenu()
@@ -501,7 +518,7 @@ INT_PTR CVkProto::GetCaps(int type, MCONTACT)
 		return 4096;
 
 	case PFLAG_UNIQUEIDTEXT:
-		return (INT_PTR)"VKontakte ID";
+		return (INT_PTR)L"VKontakte ID";
 	}
 	return 0;
 }
@@ -665,8 +682,9 @@ void CVkProto::OnContactDeleted(MCONTACT hContact)
 		return;
 
 	CMStringA code(FORMAT, "var userID=\"%d\";", userID);
+
 	if (param->bDeleteDialog)
-		code += "API.messages.deleteDialog({\"user_id\":userID,count:10000});";
+		code += "API.messages.deleteConversation({\"peer_id\":userID});";
 
 	if (param->bDeleteFromFriendlist)
 		code += "API.friends.delete({\"user_id\":userID});";

@@ -1,7 +1,7 @@
 ;============================================================
 ;  File: miranda32/64.exe
 ;  Module: Miranda Core
-;  Version: 0.95.12
+;  Version: 0.95.13
 ;============================================================
 ;file \src\core\stdautoaway\res\resource.rc
 [Become idle if the following is left unattended:]
@@ -66,14 +66,6 @@
 Удалить %s из списка?
 [This will erase all history and settings for this contact!]
 Будет удалена вся история и все настройки для данного контакта!
-[Hide offline users]
-Скрыть отключённых
-[Hide empty groups]
-Скрыть пустые группы
-[Disable groups]
-Отключить группы
-[Ask before deleting contacts]
-Подтверждение удаления
 [Sort contacts by name]
 Сортировка по имени
 [Sort contacts by status]
@@ -100,14 +92,14 @@
 Несколько значков
 [Only when statuses differ]
 При разных статусах
-[Contact list]
-Список контактов
 [System tray icon]
 Значок в трее
 [System tray icon when using multiple protocols]
 Значки протоколов в системном трее
 [Contact list sorting]
 Сортировка списка контактов
+[Don't move offline user to bottom]
+Не перемещать отключённых вниз
 [Window]
 Окно
 [Always on top]
@@ -170,8 +162,6 @@
 Полупрозрачное выделение
 [Dim idle contacts]
 Затемнить неактивных пользователей
-['Hide offline' means to hide:]
-'Скрыть отключённых' - скрыть:
 [Groups]
 Группы
 [Draw a line alongside group names]
@@ -196,10 +186,10 @@
 Время:
 [milliseconds]
 мс
-[Left margin:]
-Левое поле:
 [Hide vertical scroll bar]
 Скрыть полосу прокрутки
+[Left margin:]
+Левое поле:
 [Row height:]
 Высота строки:
 [Gamma correction]
@@ -308,9 +298,9 @@
 [Save as...]
 Сохранить как...
 [Auto rename]
-Автопереименование
+Автоименование
 [Skip]
-Пропуск
+Пропустить
 [Cancel transfer]
 Отмена
 [You are about to receive the file]
@@ -1104,6 +1094,8 @@ UIN, E-mail и т.д.
 Показывать контекстное меню
 [Show user information]
 Показывать инфо пользователя
+[Contact list]
+Список контактов
 [Display subcontact nickname]
 Использовать ник субконтакта
 [Display subcontact display name]
@@ -1152,10 +1144,38 @@ UIN, E-mail и т.д.
 О программе
 [Credits >]
 Благодарности >
-[Hidden window]
-Скрытое окно
+[Hide offline users]
+Скрыть отключённых
+[Hide empty groups]
+Скрыть пустые группы
+[Enable groups]
+Включить группы
+[Ask before deleting contacts]
+Подтверждение удаления
+[Remove temporary contacts on exit]
+Удалять временные контакты при выходе
+['Hide offline' means to hide:]
+'Скрыть отключённых' - скрыть:
+[Default settings for known event types]
+Настройки для известных типов событий
+[Show when filter is active]
+Показывать при вкл. фильтре
+[Popup]
+Всплывающее окно
 [Tray]
 Трей
+[Sound]
+Звук
+[Log to file]
+Запись в файл
+[Show icons in tray only when the chat room is not active]
+Показывать значки в трее только когда окно чата не активно
+[Highlight event]
+Подсветка
+[Show popups only when the chat room is not active]
+Показывать всплывающие окна только когда окно чата не активно
+[Hidden window]
+Скрытое окно
 [&Hide/Show]
 С&крыть/Показать
 [E&xit]
@@ -1246,6 +1266,7 @@ Google Карты
 &Прочитать сообщение "%s"
 [Re&ad status message]
 Пр&очитать статусное сообщение
+;file \src\core\stdaway\src\options.cpp
 ;file \src\core\stdaway\src\sendmsg.cpp
 [I've been away since %time%.]
 Отсутствую с %time%.
@@ -1310,6 +1331,8 @@ Google Карты
 ;file \src\core\stdclist\src\clistopts.cpp
 [Global]
 Глобальные
+[General]
+Общее
 ;file \src\core\stdclist\src\cluiopts.cpp
 ;file \src\core\stdcrypt\src\encrypt.cpp
 [Standard crypto provider]
@@ -1474,28 +1497,6 @@ Google Карты
 Запретить цвета в журнале
 [Enable the 'event filter' for new rooms]
 Включить 'фильтр событий' для новых комнат чата
-[Show topic changes]
-Смена темы
-[Show users joining]
-Новые пользователи
-[Show users disconnecting]
-Пользователи, покинувшие сервер
-[Show messages]
-Сообщения
-[Show actions]
-Действия
-[Show users leaving]
-Пользователи, покинувшие комнату чата
-[Show users being kicked]
-Пинки из комнаты чата
-[Show notices]
-Уведомления
-[Show users changing name]
-Смена псевдонима
-[Show information messages]
-Информационные сообщения
-[Show status changes of users]
-Смена статуса
 [Show icon for topic changes]
 Смены темы
 [Show icon for users joining]
@@ -1519,58 +1520,6 @@ Google Карты
 [Show icon for information messages]
 Информационные сообщения
 [Show icon for status changes]
-Смены статусов
-[Show icons in tray only when the chat room is not active]
-Показывать значки в трее, когда окно чата неактивно
-[Show icon in tray for topic changes]
-Смена темы
-[Show icon in tray for users joining]
-Подключения участников
-[Show icon in tray for users disconnecting]
-Отключения участников
-[Show icon in tray for messages]
-Сообщения
-[Show icon in tray for actions]
-Действия
-[Show icon in tray for highlights]
-Подсвеченные сообщения
-[Show icon in tray for users leaving]
-Выходы участников
-[Show icon in tray for users kicking other user]
-Пинки
-[Show icon in tray for notices]
-Показывать значок уведомления в трее
-[Show icon in tray for name changes]
-Смены псевдонимов
-[Show icon in tray for information messages]
-Информационные сообщения
-[Show icon in tray for status changes]
-Смены статусов
-[Show popups only when the chat room is not active]
-Смена темы
-[Show popup for topic changes]
-Смена темы
-[Show popup for users joining]
-Подключения участников
-[Show popup for users disconnecting]
-Отключения участников
-[Show popup for messages]
-Сообщения
-[Show popup for actions]
-Действия
-[Show popup for highlights]
-Подсвеченные сообщения
-[Show popup for users leaving]
-Выходы участников
-[Show popup for users kicking other user]
-Пинки
-[Show popup for notices]
-Всплывающие окна уведомлений
-[Show popup for name changes]
-Смены псевдонимов
-[Show popup for information messages]
-Информационные сообщения
-[Show popup for status changes]
 Смены статусов
 [Window icon]
 Значок окна
@@ -1646,16 +1595,8 @@ Google Карты
 Интерфейс и функциональность окон чата
 [Appearance of the message log]
 Внешний вид журнала сообщений
-[Default events to show in new chat rooms if the 'event filter' is enabled]
-Показать в новом окне, если 'Фильтр событий' включён
 [Icons to display in the message log]
 Значки журнала сообщений
-[Icons to display in the tray]
-Значки в трее
-[Popups to display]
-Всплывающие окна
-[General]
-Общее
 [Chat log]
 Журнал чата
 [Chat]
@@ -1839,7 +1780,7 @@ Miranda не смогла загрузить встроенную систему
 Классы
 ;file \src\core\stdpopup\src\services.cpp
 [Disable popups]
-Отключить всплывающие окна
+Выключить всплывающие окна
 [Enable popups]
 Включить всплывающие окна
 ;file \src\core\stdpopup\src\yapp.cpp
@@ -2012,10 +1953,10 @@ Miranda не смогла загрузить встроенную систему
 Вы сменили имя на %s
 [%s kicked %s]
 %s выкинул %s
-[Notice from %s: ]
-Уведомление от %s:\s
-[The topic is '%s%s']
-Тема '%s%s'
+[Notice from %s]
+Уведомление от %s
+[The topic is '%s']
+Тема '%s'
 [ (set by %s on %s)]
  (установлена %s %s)
 [ (set by %s)]
@@ -2091,8 +2032,6 @@ Miranda не смогла загрузить встроенную систему
 %s вышел из %s
 [%s kicked %s from %s]
 %s выкинул %s из %s
-[Notice from %s]
-Уведомление от %s
 [Topic change in %s]
 Смена темы в %s
 [Information in %s]
@@ -2101,28 +2040,13 @@ Miranda не смогла загрузить встроенную систему
 %s включает статус '%s' для %s в %s
 [%s disables '%s' status for %s in %s]
 %s выключает статус '%s' для %s в %s
-[%s says: %s]
-%s говорит: %s
-[%s has left (%s)]
-%s вышел (%s)
-[%s has disconnected (%s)]
-%s отключился (%s)
-[%s kicked %s (%s)]
-%s выкинул %s (%s)
-[Notice from %s: %s]
-Уведомление от %s: %s
-[The topic is '%s']
-Тема '%s'
-[The topic is '%s' (set by %s)]
-Тема '%s' (установлена %s)
+[%s says]
+%s говорит
 [Chat rooms]
 Чаты
-[Look up '%s':]
-Искать '%s':
-[No word to look up]
-Нет слов для просмотра
-[&Message %s]
-&Сообщение %s
+;file \src\mir_app\src\chat_ui.cpp
+[Events and filters]
+События и фильтры
 ;file \src\mir_app\src\clcitems.cpp
 ;file \src\mir_app\src\clistgroups.cpp
 [New group]
@@ -2142,6 +2066,9 @@ Miranda не смогла загрузить встроенную систему
 Подключение
 [Connecting (attempt %d)]
 Подключение (попытка %d)
+;file \src\mir_app\src\clistopts.cpp
+[Common]
+Общие
 ;file \src\mir_app\src\clistsettings.cpp
 [(Unknown contact)]
 (Неизвестный контакт)
@@ -2371,6 +2298,8 @@ Win +\s
 Прочитать сообщение
 [Open Options page]
 Открыть настройки
+[Toggle groups]
+Вкл/Выкл группы
 [Open logging options]
 Настройки журналирования сети
 [Open 'Find user' dialog]
@@ -2618,6 +2547,8 @@ xСтатус
 Запустить
 [Compact]
 Сжать
+[Check database]
+Проверить базу
 [Size]
 Размер
 [Created]
@@ -2628,6 +2559,15 @@ xСтатус
 Мои профили
 [New profile]
 Создать профиль
+;file \src\mir_app\src\proto_interface.cpp
+[Request authorization]
+Запросить авторизацию
+[Grant authorization]
+Авторизовать
+[Revoke authorization]
+Отозвать авторизацию
+[Load server history]
+Загрузить историю с сервера
 ;file \src\mir_app\src\proto_opts.cpp
 [WARNING! The account is going to be deleted. It means that all its settings, contacts and histories will be also erased.\n\nAre you absolutely sure?]
 ВНИМАНИЕ! Учётная запись будет удалена. Это означает, что все настройки, контакты и история также будут удалены.\n\nВы точно уверены?
@@ -2682,13 +2622,6 @@ ID учётной записи
 [&Accounts...]
 &Учётные записи...
 ;file \src\mir_app\src\proto_order.cpp
-;file \src\mir_app\src\proto_utils.cpp
-[Request authorization]
-Запросить авторизацию
-[Grant authorization]
-Авторизовать
-[Revoke authorization]
-Отозвать авторизацию
 ;file \src\mir_app\src\searchresults.cpp
 [Could not start a search on '%s', there was a problem - is %s connected?]
 Не могу запустить поиск в сети %s. Пожалуйста, проверьте подключение к сети %s.
@@ -2760,8 +2693,6 @@ ANSI плагин
 Откл.
 [Password]
 Пароль
-[Unused]
-Не используется
 [Frames]
 Фреймы
 [Add group]
@@ -2788,6 +2719,8 @@ ANSI плагин
 [Unselect all]
 Снять выбор
 ;file \src\mir_app\src\srmm_base.cpp
+[&Message %s]
+&Сообщение %s
 [Nickname]
 Ник
 [Unique ID]
@@ -2795,6 +2728,11 @@ ANSI плагин
 ;file \src\mir_app\src\srmm_log.cpp
 [Log viewer]
 Просмотрщик журнала сообщений
+;file \src\mir_app\src\srmm_log_rtf.cpp
+[Look up '%s':]
+Искать '%s':
+[No word to look up]
+Нет слов для просмотра
 ;file \src\mir_app\src\srmm_toolbar.cpp
 [<Separator>]
 <Разделитель>

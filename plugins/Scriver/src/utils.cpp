@@ -72,36 +72,6 @@ wchar_t* limitText(wchar_t *text, int limit)
 	return text;
 }
 
-static DWORD CALLBACK StreamOutCallback(DWORD_PTR dwCookie, LPBYTE pbBuff, LONG cb, LONG * pcb)
-{
-	MessageSendQueueItem *msi = (MessageSendQueueItem *)dwCookie;
-	msi->sendBuffer = (char*)mir_realloc(msi->sendBuffer, msi->sendBufferSize + cb + 2);
-	memcpy(msi->sendBuffer + msi->sendBufferSize, pbBuff, cb);
-	msi->sendBufferSize += cb;
-	*((wchar_t*)(msi->sendBuffer + msi->sendBufferSize)) = '\0';
-	*pcb = cb;
-	return 0;
-}
-
-wchar_t *GetRichEditSelection(HWND hwnd)
-{
-	CHARRANGE sel;
-	SendMessage(hwnd, EM_EXGETSEL, 0, (LPARAM)&sel);
-	if (sel.cpMin == sel.cpMax)
-		return nullptr;
-		
-	MessageSendQueueItem msi;
-	msi.sendBuffer = nullptr;
-	msi.sendBufferSize = 0;
-
-	EDITSTREAM stream;
-	memset(&stream, 0, sizeof(stream));
-	stream.pfnCallback = StreamOutCallback;
-	stream.dwCookie = (DWORD_PTR)&msi;
-	SendMessage(hwnd, EM_STREAMOUT, SF_TEXT | SF_UNICODE | SFF_SELECTION, (LPARAM)&stream);
-	return (wchar_t*)msi.sendBuffer;
-}
-
 int MeasureMenuItem(WPARAM, LPARAM lParam)
 {
 	LPMEASUREITEMSTRUCT mis = (LPMEASUREITEMSTRUCT)lParam;
@@ -225,13 +195,6 @@ void SearchWord(wchar_t *word, int engine)
 
 		Utils_OpenUrl(szURL);
 	}
-}
-
-void CMsgDialog::GetContactUniqueId(char *buf, int maxlen)
-{
-	ptrW id(Contact_GetInfo(CNF_UNIQUEID, m_hContact, m_szProto));
-	if (id != nullptr)
-		strncpy_s(buf, maxlen, _T2A(id), _TRUNCATE);
 }
 
 HWND CreateToolTip(HWND hwndParent, LPTSTR ptszText, LPTSTR ptszTitle, RECT *rect)

@@ -26,12 +26,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "stdafx.h"
 
-#define JCPF_IN    0x01UL
-#define JCPF_OUT   0x02UL
-#define JCPF_ERROR 0x04UL
-
-#define JCPF_TCHAR 0x00UL
-
 #define WM_CREATECONSOLE  WM_USER+1000
 
 #ifndef SES_EXTENDBACKCOLOR
@@ -90,7 +84,7 @@ void CJabberProto::OnConsoleProcessXml(const TiXmlElement *node, DWORD flags)
 				sttRtfAppendXml(&buf, node, flags, 1);
 				sttAppendBufRaw(&buf, RTF_SEPARATOR);
 				sttAppendBufRaw(&buf, RTF_FOOTER);
-				SendMessage(m_pDlgConsole->GetHwnd(), WM_JABBER_REFRESH, 0, (LPARAM)&buf);
+				m_pDlgConsole->OnProtoRefresh(0, (LPARAM)&buf);
 				sttEmptyBuf(&buf);
 			}
 		}
@@ -196,8 +190,10 @@ static void sttRtfAppendXml(StringBuf *buf, const TiXmlElement *node, DWORD flag
 
 	sttAppendBufRaw(buf, RTF_BEGINTAG);
 	sttAppendBufRaw(buf, indentLevel);
-	if (flags&JCPF_IN)	sttAppendBufRaw(buf, "\\highlight3 ");
-	if (flags&JCPF_OUT)	sttAppendBufRaw(buf, "\\highlight4 ");
+	if (flags & JCPF_IN)
+		sttAppendBufRaw(buf, "\\highlight3 ");
+	if (flags & JCPF_OUT)
+		sttAppendBufRaw(buf, "\\highlight4 ");
 	sttAppendBufRaw(buf, "<");
 	sttAppendBufRaw(buf, RTF_BEGINTAGNAME);
 	sttAppendBufRaw(buf, node->Name());
@@ -381,21 +377,20 @@ public:
 		return true;
 	}
 
-	bool OnClose() override
+	bool OnApply() override
 	{
 		m_proto->setByte("consoleWnd_msg", m_proto->m_filterInfo.msg);
 		m_proto->setByte("consoleWnd_presence", m_proto->m_filterInfo.presence);
 		m_proto->setByte("consoleWnd_iq", m_proto->m_filterInfo.iq);
 		m_proto->setByte("consoleWnd_ftype", m_proto->m_filterInfo.type);
 		m_proto->setWString("consoleWnd_fpattern", m_proto->m_filterInfo.pattern);
-
-		Utils_SaveWindowPosition(m_hwnd, 0, m_proto->m_szModuleName, "consoleWnd_");
-		DestroyWindow(m_hwnd);
-		return CSuper::OnClose();
+		return true;
 	}
 
 	void OnDestroy() override
 	{
+		Utils_SaveWindowPosition(m_hwnd, 0, m_proto->m_szModuleName, "consoleWnd_");
+
 		IcoLib_ReleaseIcon((HICON)SendDlgItemMessage(m_hwnd, IDC_BTN_MSG, BM_SETIMAGE, IMAGE_ICON, 0));
 		IcoLib_ReleaseIcon((HICON)SendDlgItemMessage(m_hwnd, IDC_BTN_PRESENCE, BM_SETIMAGE, IMAGE_ICON, 0));
 		IcoLib_ReleaseIcon((HICON)SendDlgItemMessage(m_hwnd, IDC_BTN_IQ, BM_SETIMAGE, IMAGE_ICON, 0));
@@ -451,7 +446,7 @@ public:
 
 					TiXmlDocument doc;
 					if (0 == doc.Parse(T2Utf(textToSend)))
-						m_proto->m_ThreadInfo->send(doc.ToElement());
+						m_proto->m_ThreadInfo->send(doc.RootElement());
 					else {
 						StringBuf buf = {};
 						sttAppendBufRaw(&buf, RTF_HEADER);
@@ -460,7 +455,7 @@ public:
 						sttAppendBufRaw(&buf, RTF_ENDPLAINXML);
 						sttAppendBufRaw(&buf, RTF_SEPARATOR);
 						sttAppendBufRaw(&buf, RTF_FOOTER);
-						SendMessage(m_hwnd, WM_JABBER_REFRESH, 0, (LPARAM)&buf);
+						OnProtoRefresh(0, (LPARAM)&buf);
 						sttEmptyBuf(&buf);
 					}
 
@@ -607,7 +602,7 @@ void CJabberProto::ConsoleUninit()
 		m_hThreadConsole = nullptr;
 	}
 
-	m_filterInfo.iq = m_filterInfo.msg = m_filterInfo.presence = FALSE;
+	m_filterInfo.iq = m_filterInfo.msg = m_filterInfo.presence = false;
 	m_filterInfo.type = TFilterInfo::T_OFF;
 }
 

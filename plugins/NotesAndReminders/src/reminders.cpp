@@ -1419,12 +1419,11 @@ public:
 		return true;
 	}
 
-	bool OnClose() override
+	void OnDestroy() override
 	{
 		bNewReminderVisible = false;
 		if (m_pReminder)
 			m_pReminder->bVisible = false;
-		return true;
 	}
 
 	void onClick_Add(CCtrlButton*)

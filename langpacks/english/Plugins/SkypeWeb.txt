@@ -2,7 +2,7 @@
 ;============================================================
 ;  File: SkypeWeb.dll
 ;  Plugin: Skype protocol (Web)
-;  Version: 0.12.3.5
+;  Version: 0.95.12.1
 ;  Authors: Miranda NG team
 ;============================================================
 [Skype protocol support for Miranda NG. Based on new Skype for Web.]
@@ -66,11 +66,11 @@
 [Call ended (%s)]
 [File transfer:\n\tFile name: %s \n\tSize: %lld bytes \n]
 [Preview]
+[Full image]
 [Unknown event, please send this text for developer: "%s"]
 ;file \protocols\SkypeWeb\src\skype_icons.cpp
 [Protocol icon]
 [Create new chat icon]
-[Sync history icon]
 [Block user icon]
 [Unblock user icon]
 [Incoming call icon]
@@ -84,7 +84,6 @@
 [Too many failed authentication attempts with given username or IP.]
 [Authentication failed. Unknown error.]
 ;file \protocols\SkypeWeb\src\skype_menus.cpp
-[Get server history]
 [Block contact]
 [Unblock contact]
 [Create new chat]
@@ -92,8 +91,6 @@
 [You cannot send when you are offline.]
 [Unknown error!]
 [Network error!]
-;file \protocols\SkypeWeb\src\skype_mslogin.cpp
-[Enter confirmation code]
 ;file \protocols\SkypeWeb\src\skype_network.cpp
 [%s connection]
 ;file \protocols\SkypeWeb\src\skype_options.cpp
@@ -105,5 +102,3 @@
 ;file \protocols\SkypeWeb\src\skype_proto.cpp
 [Incoming call canceled]
 [Skypename]
-;file \protocols\SkypeWeb\src\skype_trouter.cpp
-[Incoming call from %s]

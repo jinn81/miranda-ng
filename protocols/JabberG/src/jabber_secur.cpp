@@ -28,33 +28,38 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 /////////////////////////////////////////////////////////////////////////////////////////
 // ntlm auth - LanServer based authorization
 
-TNtlmAuth::TNtlmAuth(ThreadData *info, const char *mechanism, const char *hostname) :
-	TJabberAuth(info)
+TNtlmAuth::TNtlmAuth(ThreadData *info, const char *mechanism) :
+	TJabberAuth(info, mechanism)
 {
-	szName = mechanism;
-	szHostName = hostname;
+	bIsValid = false;
 
 	const wchar_t *szProvider;
 	if (!mir_strcmp(mechanism, "GSS-SPNEGO"))
-		szProvider = L"Negotiate";
+		szProvider = L"Negotiate", priority = 703;
 	else if (!mir_strcmp(mechanism, "GSSAPI"))
-		szProvider = L"Kerberos";
+		szProvider = L"Kerberos", priority = 702;
 	else if (!mir_strcmp(mechanism, "NTLM"))
-		szProvider = L"NTLM";
-	else {
-LBL_Invalid:
-		bIsValid = false;
-		hProvider = nullptr;
+		szProvider = L"NTLM", priority = 701;
+	else
 		return;
-	}
 
 	wchar_t szSpn[1024]; szSpn[0] = 0;
 	if (!mir_strcmp(mechanism, "GSSAPI"))
 		if (!getSpn(szSpn, _countof(szSpn)))
-			goto LBL_Invalid;
+			return;
 
 	if ((hProvider = Netlib_InitSecurityProvider(szProvider, szSpn)) == nullptr)
-		bIsValid = false;
+		return;
+	
+	// This generates login method advertisement packet
+	if (info->conn.password[0] != 0)
+		szInitRequest = Netlib_NtlmCreateResponse(hProvider, "", Utf2T(info->conn.username), Utf2T(info->conn.password), complete);
+	else
+		szInitRequest = Netlib_NtlmCreateResponse(hProvider, "", nullptr, nullptr, complete);
+	if (szInitRequest == nullptr)
+		return;
+
+	bIsValid = true;
 }
 
 TNtlmAuth::~TNtlmAuth()
@@ -77,9 +82,9 @@ bool TNtlmAuth::getSpn(wchar_t* szSpn, size_t dwSpnLen)
 	if (name) *name = 0;
 	else return false;
 
-	if (szHostName && szHostName[0]) {
+	if (info->gssapiHostName && info->gssapiHostName[0]) {
 		wchar_t *szFullUserNameU = wcsupr(mir_wstrdup(szFullUserName));
-		mir_snwprintf(szSpn, dwSpnLen, L"xmpp/%s/%s@%s", szHostName, szFullUserName, szFullUserNameU);
+		mir_snwprintf(szSpn, dwSpnLen, L"xmpp/%s/%s@%s", info->gssapiHostName, szFullUserName, szFullUserNameU);
 		mir_free(szFullUserNameU);
 	}
 	else {
@@ -101,14 +106,7 @@ bool TNtlmAuth::getSpn(wchar_t* szSpn, size_t dwSpnLen)
 
 char* TNtlmAuth::getInitialRequest()
 {
-	if (!hProvider)
-		return nullptr;
-
-	// This generates login method advertisement packet
-	if (info->conn.password[0] != 0)
-		return Netlib_NtlmCreateResponse(hProvider, "", Utf2T(info->conn.username), Utf2T(info->conn.password), complete);
-
-	return Netlib_NtlmCreateResponse(hProvider, "", nullptr, nullptr, complete);
+	return szInitRequest.detach();
 }
 
 char* TNtlmAuth::getChallenge(const char *challenge)
@@ -127,10 +125,10 @@ char* TNtlmAuth::getChallenge(const char *challenge)
 // md5 auth - digest-based authorization
 
 TMD5Auth::TMD5Auth(ThreadData *info) :
-	TJabberAuth(info),
+	TJabberAuth(info, "DIGEST-MD5"),
 	iCallCount(0)
 {
-	szName = "DIGEST-MD5";
+	priority = 301;
 }
 
 TMD5Auth::~TMD5Auth()
@@ -206,11 +204,23 @@ char* TMD5Auth::getChallenge(const char *challenge)
 /////////////////////////////////////////////////////////////////////////////////////////
 // SCRAM-SHA-1 authorization
 
-TScramAuth::TScramAuth(ThreadData *info) :
-	TJabberAuth(info)
+TScramAuth::TScramAuth(ThreadData *info, const char *pszMech, const EVP_MD *pMethod, int iPriority) :
+	TJabberAuth(info, pszMech),
+	hashMethod(pMethod)
 {
-	szName = "SCRAM-SHA-1";
-	cnonce = msg1 = serverSignature = nullptr;
+	priority = iPriority;
+
+	if ((iPriority % 10) == 1) {
+		bindFlag = "p=tls-unique,,";
+
+		int cbLen;
+		void *pData = Netlib_GetTlsUnique(info->s, cbLen);
+		if (pData == nullptr)
+			bIsValid = false;
+		else
+			bindData.append(pData, cbLen);
+	}
+	else bindFlag = "n,,";
 }
 
 TScramAuth::~TScramAuth()
@@ -220,22 +230,35 @@ TScramAuth::~TScramAuth()
 	mir_free(serverSignature);
 }
 
-void TScramAuth::Hi(BYTE* res, char* passw, size_t passwLen, char* salt, size_t saltLen, int ind)
+void TScramAuth::Hi(BYTE *res, char *passw, size_t passwLen, char *salt, size_t saltLen, int ind)
 {
 	size_t bufLen = saltLen + sizeof(UINT32);
-	BYTE *u = (BYTE*)_alloca(max(bufLen, MIR_SHA1_HASH_SIZE));
+	BYTE *u = (BYTE*)_alloca(max(bufLen, EVP_MAX_MD_SIZE));
 	memcpy(u, salt, saltLen); *(UINT32*)(u + saltLen) = htonl(1);
 	
-	memset(res, 0, MIR_SHA1_HASH_SIZE);
+	memset(res, 0, EVP_MAX_MD_SIZE);
 
 	for (int i = 0; i < ind; i++) {
 		unsigned int len;
-		HMAC(EVP_sha1(), (BYTE*)passw, (unsigned)passwLen, u, (unsigned)bufLen, u, &len);
-		bufLen = MIR_SHA1_HASH_SIZE;
+		HMAC(hashMethod, (BYTE*)passw, (unsigned)passwLen, u, (unsigned)bufLen, u, &len);
+		bufLen = hashMethod->md_size;
 
-		for (unsigned j = 0; j < MIR_SHA1_HASH_SIZE; j++)
+		for (int j = 0; j < hashMethod->md_size; j++)
 			res[j] ^= u[j];
 	}
+}
+
+char* TScramAuth::getInitialRequest()
+{
+	unsigned char nonce[24];
+	Utils_GetRandom(nonce, sizeof(nonce));
+	cnonce = mir_base64_encode(nonce, sizeof(nonce));
+
+	CMStringA buf(FORMAT, "n=%s,r=%s", info->conn.username, cnonce);
+	msg1 = mir_strdup(buf);
+
+	buf.Insert(0, bindFlag);
+	return mir_base64_encode(buf, buf.GetLength());
 }
 
 char* TScramAuth::getChallenge(const char *challenge)
@@ -244,7 +267,13 @@ char* TScramAuth::getChallenge(const char *challenge)
 	ptrA snonce, salt;
 	int ind = -1;
 
-	ptrA chl((char*)mir_base64_decode(challenge, &chlLen));
+	ptrA chl((char *)mir_base64_decode(challenge, &chlLen)), cbd;
+	if (bindData.isEmpty())
+		cbd = mir_base64_encode(bindFlag, mir_strlen(bindFlag));
+	else {
+		bindData.appendBefore((void*)bindFlag, mir_strlen(bindFlag));
+		cbd = mir_base64_encode(bindData.data(), bindData.length());
+	}
 
 	for (char *p = strtok(NEWSTR_ALLOCA(chl), ","); p != nullptr; p = strtok(nullptr, ",")) {
 		if (*p == 'r' && p[1] == '=') { // snonce
@@ -261,54 +290,42 @@ char* TScramAuth::getChallenge(const char *challenge)
 	if (snonce == nullptr || salt == nullptr || ind == -1)
 		return nullptr;
 
-	BYTE saltedPassw[MIR_SHA1_HASH_SIZE];
+	BYTE saltedPassw[EVP_MAX_MD_SIZE];
 	Hi(saltedPassw, info->conn.password, mir_strlen(info->conn.password), salt, saltLen, ind);
 
-	BYTE clientKey[MIR_SHA1_HASH_SIZE];
+	BYTE clientKey[EVP_MAX_MD_SIZE];
 	unsigned int len;
-	HMAC(EVP_sha1(), saltedPassw, sizeof(saltedPassw), (BYTE*)"Client Key", 10, clientKey, &len);
+	HMAC(hashMethod, saltedPassw, hashMethod->md_size, (BYTE*)"Client Key", 10, clientKey, &len);
 
-	BYTE storedKey[MIR_SHA1_HASH_SIZE];
+	BYTE storedKey[EVP_MAX_MD_SIZE];
 
-	mir_sha1_ctx ctx;
-	mir_sha1_init(&ctx);
-	mir_sha1_append(&ctx, clientKey, MIR_SHA1_HASH_SIZE);
-	mir_sha1_finish(&ctx, storedKey);
+	EVP_MD_CTX pctx = {};
+	pctx.digest = hashMethod;
+	pctx.md_data = _alloca(hashMethod->ctx_size);
+	hashMethod->init(&pctx);
+	hashMethod->update(&pctx, clientKey, hashMethod->md_size);
+	hashMethod->final(&pctx, storedKey);
 
-	char authmsg[4096];
-	int authmsgLen = mir_snprintf(authmsg, "%s,%s,c=biws,r=%s", msg1, chl.get(), snonce.get());
+	CMStringA authmsg(FORMAT, "%s,%s,c=%s,r=%s", msg1, chl.get(), cbd.get(), snonce.get());
 
-	BYTE clientSig[MIR_SHA1_HASH_SIZE];
-	HMAC(EVP_sha1(), storedKey, sizeof(storedKey), (BYTE*)authmsg, authmsgLen, clientSig, &len);
+	BYTE clientSig[EVP_MAX_MD_SIZE];
+	HMAC(hashMethod, storedKey, hashMethod->md_size, (BYTE*)authmsg.c_str(), authmsg.GetLength(), clientSig, &len);
 
-	BYTE clientProof[MIR_SHA1_HASH_SIZE];
-	for (unsigned j = 0; j < sizeof(clientKey); j++)
+	BYTE clientProof[EVP_MAX_MD_SIZE];
+	for (int j = 0; j < hashMethod->md_size; j++)
 		clientProof[j] = clientKey[j] ^ clientSig[j];
 
 	/* Calculate the server signature */
-	BYTE serverKey[MIR_SHA1_HASH_SIZE];
-	HMAC(EVP_sha1(), saltedPassw, sizeof(saltedPassw), (BYTE*)"Server Key", 10, serverKey, &len);
+	BYTE serverKey[EVP_MAX_MD_SIZE];
+	HMAC(hashMethod, saltedPassw, hashMethod->md_size, (BYTE*)"Server Key", 10, serverKey, &len);
 
-	BYTE srvSig[MIR_SHA1_HASH_SIZE];
-	HMAC(EVP_sha1(), serverKey, sizeof(serverKey), (BYTE*)authmsg, authmsgLen, srvSig, &len);
-	serverSignature = mir_base64_encode(srvSig, sizeof(srvSig));
+	BYTE srvSig[EVP_MAX_MD_SIZE];
+	HMAC(hashMethod, serverKey, hashMethod->md_size, (BYTE*)authmsg.c_str(), authmsg.GetLength(), srvSig, &len);
+	serverSignature = mir_base64_encode(srvSig, hashMethod->md_size);
 
-	char buf[4096];
-	ptrA encproof(mir_base64_encode(clientProof, sizeof(clientProof)));
-	int cbLen = mir_snprintf(buf, "c=biws,r=%s,p=%s", snonce.get(), encproof.get());
-	return mir_base64_encode(buf, cbLen);
-}
-
-char* TScramAuth::getInitialRequest()
-{
-	unsigned char nonce[24];
-	Utils_GetRandom(nonce, sizeof(nonce));
-	cnonce = mir_base64_encode(nonce, sizeof(nonce));
-
-	char buf[4096];
-	int cbLen = mir_snprintf(buf, "n,,n=%s,r=%s", info->conn.username, cnonce);
-	msg1 = mir_strdup(buf + 3);
-	return mir_base64_encode(buf, cbLen);
+	ptrA encproof(mir_base64_encode(clientProof, hashMethod->md_size));
+	CMStringA buf(FORMAT, "c=%s,r=%s,p=%s", cbd.get(), snonce.get(), encproof.get());
+	return mir_base64_encode(buf, buf.GetLength());
 }
 
 bool TScramAuth::validateLogin(const char *challenge)
@@ -322,14 +339,10 @@ bool TScramAuth::validateLogin(const char *challenge)
 // plain auth - the most simple one
 
 TPlainAuth::TPlainAuth(ThreadData *info, bool old) :
-	TJabberAuth(info)
+	TJabberAuth(info, "PLAIN"),
+	bOld(old)
 {
-	szName = "PLAIN";
-	bOld = old;
-}
-
-TPlainAuth::~TPlainAuth()
-{
+	priority = (old) ? 100 : 101;
 }
 
 char* TPlainAuth::getInitialRequest()
@@ -346,11 +359,9 @@ char* TPlainAuth::getInitialRequest()
 /////////////////////////////////////////////////////////////////////////////////////////
 // basic type
 
-TJabberAuth::TJabberAuth(ThreadData* pInfo) :
-	bIsValid(true),
-	complete(0),
-	szName(nullptr),
-	info(pInfo)
+TJabberAuth::TJabberAuth(ThreadData *pInfo, const char *pszMech) :
+	info(pInfo),
+	szName(mir_strdup(pszMech))
 {
 }
 

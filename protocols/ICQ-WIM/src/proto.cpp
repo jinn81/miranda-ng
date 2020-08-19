@@ -62,12 +62,15 @@ CIcqProto::CIcqProto(const char *aProtoName, const wchar_t *aUserName) :
 
 	// services
 	CreateProtoService(PS_CREATEACCMGRUI, &CIcqProto::CreateAccMgrUI);
+
 	CreateProtoService(PS_GETAVATARCAPS, &CIcqProto::GetAvatarCaps);
 	CreateProtoService(PS_GETAVATARINFO, &CIcqProto::GetAvatarInfo);
 	CreateProtoService(PS_GETMYAVATAR, &CIcqProto::GetAvatar);
+	CreateProtoService(PS_SETMYAVATAR, &CIcqProto::SetAvatar);
+
+	CreateProtoService(PS_MENU_LOADHISTORY, &CIcqProto::OnMenuLoadHistory);
 	CreateProtoService(PS_GETUNREADEMAILCOUNT, &CIcqProto::GetEmailCount);
 	CreateProtoService(PS_GOTO_INBOX, &CIcqProto::GotoInbox);
-	CreateProtoService(PS_SETMYAVATAR, &CIcqProto::SetAvatar);
 
 	// events
 	HookProtoEvent(ME_CLIST_GROUPCHANGE, &CIcqProto::OnGroupChange);
@@ -75,6 +78,13 @@ CIcqProto::CIcqProto(const char *aProtoName, const wchar_t *aUserName) :
 	HookProtoEvent(ME_GC_EVENT, &CIcqProto::GroupchatEventHook);
 	HookProtoEvent(ME_GC_BUILDMENU, &CIcqProto::GroupchatMenuHook);
 	HookProtoEvent(ME_OPT_INITIALISE, &CIcqProto::OnOptionsInit);
+
+	// group chats
+	GCREGISTER gcr = {};
+	gcr.dwFlags = GC_TYPNOTIF | GC_CHANMGR;
+	gcr.ptszDispName = m_tszUserName;
+	gcr.pszModule = m_szModuleName;
+	Chat_Register(&gcr);
 
 	// netlib handle
 	CMStringW descr(FORMAT, TranslateT("%s server connection"), m_tszUserName);
@@ -119,13 +129,12 @@ CIcqProto::~CIcqProto()
 
 void CIcqProto::OnModulesLoaded()
 {
-	GCREGISTER gcr = {};
-	gcr.dwFlags = GC_TYPNOTIF | GC_CHANMGR;
-	gcr.ptszDispName = m_tszUserName;
-	gcr.pszModule = m_szModuleName;
-	Chat_Register(&gcr);
-
 	HookProtoEvent(ME_USERINFO_INITIALISE, &CIcqProto::OnUserInfoInit);
+
+	// load custom smilies
+	CMStringW wszPath(FORMAT, L"%s\\%S\\Stickers\\*.png", VARSW(L"%miranda_avatarcache%").get(), m_szModuleName);
+	SMADD_CONT cont = { 2, m_szModuleName, wszPath };
+	CallService(MS_SMILEYADD_LOADCONTACTSMILEYS, 0, LPARAM(&cont));
 }
 
 void CIcqProto::OnShutdown()
@@ -141,6 +150,19 @@ void CIcqProto::OnContactDeleted(MCONTACT hContact)
 
 	Push(new AsyncHttpRequest(CONN_MAIN, REQUEST_GET, ICQ_API_SERVER "/buddylist/removeBuddy")
 		<< AIMSID(this) << WCHAR_PARAM("buddy", szId) << INT_PARAM("allGroups", 1));
+}
+
+void CIcqProto::OnEventEdited(MCONTACT, MEVENT)
+{
+
+}
+
+INT_PTR CIcqProto::OnMenuLoadHistory(WPARAM hContact, LPARAM)
+{
+	delSetting(hContact, DB_KEY_LASTMSGID);
+
+	RetrieveUserHistory(hContact, 1, true);
+	return 0;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -372,12 +394,24 @@ MCONTACT CIcqProto::AddToList(int, PROTOSEARCHRESULT *psr)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
+// PSR_AUTH
+
+int CIcqProto::AuthRecv(MCONTACT, PROTORECVEVENT *pre)
+{
+	return Proto_AuthRecv(m_szModuleName, pre);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
 // PSS_AUTHREQUEST
 
 int CIcqProto::AuthRequest(MCONTACT hContact, const wchar_t* szMessage)
 {
+	ptrW wszGroup(Clist_GetGroup(hContact));
+	if (!wszGroup)
+		wszGroup = mir_wstrdup(L"General");
+
 	auto *pReq = new AsyncHttpRequest(CONN_MAIN, REQUEST_POST, ICQ_API_SERVER "/buddylist/addBuddy", &CIcqProto::OnAddBuddy);
-	pReq << AIMSID(this) << WCHAR_PARAM("authorizationMsg", szMessage) << WCHAR_PARAM("buddy", GetUserId(hContact)) << CHAR_PARAM("group", "General") << INT_PARAM("preAuthorized", 1);
+	pReq << AIMSID(this) << WCHAR_PARAM("authorizationMsg", szMessage) << WCHAR_PARAM("buddy", GetUserId(hContact)) << WCHAR_PARAM("group", wszGroup) << INT_PARAM("preAuthorized", 1);
 	pReq->hContact = hContact;
 	Push(pReq);
 	return 0;
@@ -414,6 +448,21 @@ int CIcqProto::FileCancel(MCONTACT hContact, HANDLE hTransfer)
 	return 0;
 }
 
+int CIcqProto::FileResume(HANDLE hTransfer, int, const wchar_t *szFilename)
+{
+	auto *ft = (IcqFileTransfer *)hTransfer;
+	if (!m_bOnline || ft == nullptr)
+		return 1;
+
+	if (szFilename != nullptr) {
+		ft->m_wszFileName = szFilename;
+		ft->pfts.szCurrentFile.w = ft->m_wszFileName.GetBuffer();
+	}
+
+	::SetEvent(ft->hWaitEvent);
+	return 0;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////
 // GetCaps - return protocol capabilities bits
 
@@ -441,7 +490,7 @@ INT_PTR CIcqProto::GetCaps(int type, MCONTACT)
 		break;
 
 	case PFLAG_UNIQUEIDTEXT:
-		return (INT_PTR)Translate("UIN/e-mail/phone");
+		return (INT_PTR)TranslateT("UIN/e-mail/phone");
 	}
 
 	return nReturn;
@@ -501,7 +550,7 @@ HANDLE CIcqProto::SendFile(MCONTACT hContact, const wchar_t *szDescription, wcha
 		pTransfer->m_wszDescr = szDescription;
 
 	auto *pReq = new AsyncHttpRequest(CONN_NONE, REQUEST_GET, "https://files.icq.com/files/init", &CIcqProto::OnFileInit);
-	pReq << CHAR_PARAM("a", m_szAToken) << CHAR_PARAM("client", "icq") << CHAR_PARAM("f", "json") << CHAR_PARAM("filename", mir_urlEncode(T2Utf(pTransfer->m_wszShortName))) 
+	pReq << CHAR_PARAM("a", m_szAToken) << CHAR_PARAM("client", "icq") << CHAR_PARAM("f", "json") << WCHAR_PARAM("filename", pTransfer->m_wszShortName) 
 		<< CHAR_PARAM("k", ICQ_APP_ID) << INT_PARAM("size", statbuf.st_size) << INT_PARAM("ts", TS());
 	CalcHash(pReq);
 	pReq->pUserInfo = pTransfer;

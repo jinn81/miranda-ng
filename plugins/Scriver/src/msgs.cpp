@@ -88,7 +88,7 @@ static int MessageEventAdded(WPARAM hContact, LPARAM lParam)
 	if (hwnd == nullptr)
 		hwnd = Srmm_FindWindow(hContactWnd = db_event_getContact(hDbEvent));
 	if (hwnd)
-		SendMessage(hwnd, HM_DBEVENTADDED, hContactWnd, lParam);
+		::PostMessage(hwnd, HM_DBEVENTADDED, hContactWnd, lParam);
 
 	DBEVENTINFO dbei = {};
 	db_event_get(hDbEvent, &dbei);
@@ -463,7 +463,7 @@ int RegisterToolbarIcons(WPARAM, LPARAM)
 
 static int ModuleLoad(WPARAM, LPARAM)
 {
-	g_dat.smileyAddInstalled = ServiceExists(MS_SMILEYADD_SHOWSELECTION) && ServiceExists(MS_SMILEYADD_REPLACESMILEYS);
+	g_dat.smileyAddInstalled = ServiceExists(MS_SMILEYADD_REPLACESMILEYS);
 	return 0;
 }
 

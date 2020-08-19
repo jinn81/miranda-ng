@@ -280,10 +280,10 @@ void DoFlashAndSoundWorker(FLASH_PARAMS *p)
 		}
 
 		if (p->bMustFlash && p->bInactive)
-			UpdateTrayMenu(dat, si->wStatus, si->pszModule, dat->m_wszStatus, si->hContact, 1);
+			AddUnreadContact(dat->m_hContact);
 	}
 
-	mir_free(p);
+	delete p;
 }
 
 BOOL DoSoundsFlashPopupTrayStuff(SESSION_INFO *si, GCEVENT *gce, BOOL bHighlight, int bManyFix)
@@ -292,15 +292,15 @@ BOOL DoSoundsFlashPopupTrayStuff(SESSION_INFO *si, GCEVENT *gce, BOOL bHighlight
 		return FALSE;
 
 	CMsgDialog *dat = nullptr;
-	FLASH_PARAMS *params = (FLASH_PARAMS*)mir_calloc(sizeof(FLASH_PARAMS));
+	auto *params = new FLASH_PARAMS();
 	params->hContact = si->hContact;
-	params->bInactive = TRUE;
+	params->bInactive = true;
 	if (si->pDlg) {
 		dat = si->pDlg;
 		if ((si->pDlg->GetHwnd() == si->pDlg->m_pContainer->m_hwndActive) && GetForegroundWindow() == si->pDlg->m_pContainer->m_hwnd)
-			params->bInactive = FALSE;
+			params->bInactive = false;
 	}
-	params->bActiveTab = params->bMustFlash = params->bMustAutoswitch = FALSE;
+	params->bActiveTab = params->bMustFlash = params->bMustAutoswitch = false;
 	params->iEvent = gce->iType;
 
 	WPARAM wParamForHighLight = 0;
@@ -326,8 +326,8 @@ BOOL DoSoundsFlashPopupTrayStuff(SESSION_INFO *si, GCEVENT *gce, BOOL bHighlight
 		if (dat || !nen_options.iMUCDisable)
 			DoPopup(si, gce);
 		if (g_Settings.bFlashWindowHighlight && params->bInactive)
-			params->bMustFlash = TRUE;
-		params->bMustAutoswitch = TRUE;
+			params->bMustFlash = true;
+		params->bMustAutoswitch = true;
 		params->hNotifyIcon = g_chatApi.hIcons[ICON_HIGHLIGHT];
 	}
 	else {
@@ -372,7 +372,11 @@ BOOL DoSoundsFlashPopupTrayStuff(SESSION_INFO *si, GCEVENT *gce, BOOL bHighlight
 					params->hNotifyIcon = g_chatApi.hIcons[ICON_KICK];
 				break;
 			case GC_EVENT_MESSAGE:
-				params->sound = "ChatMessage";
+				if (params->bInactive)
+					params->sound = "RecvMsgInactive";
+				else
+					params->sound = "RecvMsgActive";
+				
 				if (params->bInactive && !(si->wState & STATE_TALK)) {
 					si->wState |= STATE_TALK;
 					db_set_w(si->hContact, si->pszModule, "ApparentMode", ID_STATUS_OFFLINE);
@@ -399,6 +403,9 @@ BOOL DoSoundsFlashPopupTrayStuff(SESSION_INFO *si, GCEVENT *gce, BOOL bHighlight
 					params->hNotifyIcon = g_chatApi.hIcons[ICON_TOPIC];
 				break;
 			}
+
+			if (!(db_get_dw(0, CHAT_MODULE, "SoundFlags", GC_EVENT_HIGHLIGHT) & params->iEvent))
+				params->sound = nullptr;
 		}
 		else {
 			switch (params->iEvent) {
@@ -436,9 +443,9 @@ BOOL DoSoundsFlashPopupTrayStuff(SESSION_INFO *si, GCEVENT *gce, BOOL bHighlight
 		}
 
 		if (params->iEvent == GC_EVENT_MESSAGE) {
-			params->bMustAutoswitch = TRUE;
+			params->bMustAutoswitch = true;
 			if (g_Settings.bFlashWindow)
-				params->bMustFlash = TRUE;
+				params->bMustFlash = true;
 			params->hNotifyIcon = g_chatApi.hIcons[ICON_MESSAGE];
 		}
 	}

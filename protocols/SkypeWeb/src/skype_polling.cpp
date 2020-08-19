@@ -17,7 +17,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 #include "stdafx.h"
 
-void CSkypeProto::PollingThread(void*)
+void CSkypeProto::PollingThread(void *)
 {
 	debugLogA(__FUNCTION__ ": entering");
 
@@ -27,16 +27,13 @@ void CSkypeProto::PollingThread(void*)
 			break;
 
 		int nErrors = 0;
-
-		PollRequest *request = new PollRequest(this);
+		m_iPollingId = -1;
 
 		while ((nErrors < POLLING_ERRORS_LIMIT) && m_iStatus != ID_STATUS_OFFLINE) {
-			request->nlc = m_pollingConnection;
-			NLHR_PTR response(request->Send(m_hNetlibUser));
-
-			if (response == NULL) {
+			std::unique_ptr<PollRequest> request(new PollRequest(this));
+			NLHR_PTR response(DoSend(request.get()));
+			if (response == nullptr) {
 				nErrors++;
-				m_pollingConnection = nullptr;
 				continue;
 			}
 
@@ -55,9 +52,7 @@ void CSkypeProto::PollingThread(void*)
 						break;
 				}
 			}
-			m_pollingConnection = response->nlc;
 		}
-		delete request;
 
 		if (m_iStatus != ID_STATUS_OFFLINE) {
 			debugLogA(__FUNCTION__ ": unexpected termination; switching protocol to offline");
@@ -65,7 +60,6 @@ void CSkypeProto::PollingThread(void*)
 		}
 	}
 	m_hPollingThread = nullptr;
-	m_pollingConnection = nullptr;
 	debugLogA(__FUNCTION__ ": leaving");
 }
 
@@ -74,12 +68,14 @@ void CSkypeProto::ParsePollData(const char *szData)
 	debugLogA(__FUNCTION__);
 
 	JSONNode data = JSONNode::parse(szData);
-	if (!data) return;
+	if (!data)
+		return;
 
-	const JSONNode &node = data["eventMessages"];
-	if (!node) return;
+	for (auto &message : data["eventMessages"]) {
+		int eventId = message["id"].as_int();
+		if (eventId > m_iPollingId)
+			m_iPollingId = eventId;
 
-	for (auto &message : node) {
 		const JSONNode &resType = message["resourceType"];
 		const JSONNode &resource = message["resource"];
 
@@ -104,7 +100,7 @@ void CSkypeProto::ParsePollData(const char *szData)
 
 void CSkypeProto::ProcessEndpointPresence(const JSONNode &node)
 {
-	debugLogA("CSkypeProto::ProcessEndpointPresenceRes");
+	debugLogA(__FUNCTION__);
 	std::string selfLink = node["selfLink"].as_string();
 	CMStringA skypename(UrlToSkypename(selfLink.c_str()));
 
@@ -167,7 +163,7 @@ void CSkypeProto::ProcessEndpointPresence(const JSONNode &node)
 
 void CSkypeProto::ProcessUserPresence(const JSONNode &node)
 {
-	debugLogA("CSkypeProto::ProcessUserPresenceRes");
+	debugLogA(__FUNCTION__);
 
 	std::string selfLink = node["selfLink"].as_string();
 	std::string status = node["status"].as_string();
@@ -203,5 +199,5 @@ void CSkypeProto::ProcessNewMessage(const JSONNode &node)
 		OnChatEvent(node);
 }
 
-void CSkypeProto::ProcessConversationUpdate(const JSONNode&) {}
-void CSkypeProto::ProcessThreadUpdate(const JSONNode&) {}
+void CSkypeProto::ProcessConversationUpdate(const JSONNode &) {}
+void CSkypeProto::ProcessThreadUpdate(const JSONNode &) {}

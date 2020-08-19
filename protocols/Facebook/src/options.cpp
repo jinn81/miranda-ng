@@ -23,20 +23,26 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 class CFacebookAccOptsDlg : public CFBDlgBase
 {
 	CCtrlEdit edtGroup;
-	CCtrlCheck chkEnableChats, chkHideChats, chkKeepUnread;
+	CCtrlCheck chkEnableChats, chkHideChats, chkKeepUnread, chkLoginInvis, chkLoadAll;
+	CCtrlHyperlink linkMainPage;
 
 public:
 	CFacebookAccOptsDlg(FacebookProto *pThis) :
 		CFBDlgBase(pThis, IDD_OPTIONS),
 		edtGroup(this, IDC_GROUP),
+		chkLoadAll(this, IDC_LOADALL),
 		chkHideChats(this, IDC_HIDECHATS),
 		chkKeepUnread(this, IDC_KEEP_UNREAD),
-		chkEnableChats(this, IDC_ENABLECHATS)
+		chkLoginInvis(this, IDC_INVIS_LOGIN),
+		chkEnableChats(this, IDC_ENABLECHATS),
+		linkMainPage(this, IDC_NEWACCOUNTLINK, "https://www.facebook.com")
 	{
 		CreateLink(edtGroup, pThis->m_wszDefaultGroup);
-		CreateLink(chkHideChats, pThis->m_bUseGroupchats);
+		CreateLink(chkLoadAll, pThis->m_bLoadAll);
+		CreateLink(chkHideChats, pThis->m_bHideGroupchats);
 		CreateLink(chkKeepUnread, pThis->m_bKeepUnread);
-		CreateLink(chkEnableChats, pThis->m_bHideGroupchats);
+		CreateLink(chkLoginInvis, pThis->m_bLoginInvisible);
+		CreateLink(chkEnableChats, pThis->m_bUseGroupchats);
 	}
 
 	bool OnInitDialog() override

@@ -82,7 +82,7 @@ INT_PTR NewsAggrGetCaps(WPARAM wp, LPARAM)
 	case PFLAGNUM_4:
 		return PF4_AVATARS;
 	case PFLAG_UNIQUEIDTEXT:
-		return (INT_PTR) "News Feed";
+		return (INT_PTR)L"News Feed";
 	default:
 		return 0;
 	}
@@ -116,16 +116,10 @@ INT_PTR NewsAggrLoadIcon(WPARAM wParam, LPARAM)
 	return (LOWORD(wParam) == PLI_PROTOCOL) ? (INT_PTR)CopyIcon(g_plugin.getIcon(IDI_ICON)) : 0;
 }
 
-static void __cdecl AckThreadProc(void *param)
-{
-	Sleep(100);
-	ProtoBroadcastAck(MODULENAME, (MCONTACT)param, ACKTYPE_GETINFO, ACKRESULT_SUCCESS, (HANDLE)1);
-}
-
 INT_PTR NewsAggrGetInfo(WPARAM, LPARAM lParam)
 {
 	CCSDATA *ccs = (CCSDATA *)lParam;
-	mir_forkthread(AckThreadProc, (void*)ccs->hContact);
+	ProtoBroadcastAsync(MODULENAME, ccs->hContact, ACKTYPE_GETINFO, ACKRESULT_SUCCESS, (HANDLE)1);
 	return 0;
 }
 

@@ -24,14 +24,6 @@ struct CDummyProto;
 #define DUMMY_ID_SETTING "UniqueIdSetting"
 #define DUMMY_KEY_ALLOW_SENDING "AllowSending"
 
-struct message_data
-{
-	message_data(MCONTACT hContact, const std::string &msg, int msgid) : hContact(hContact), msg(msg), msgid(msgid) {}
-	MCONTACT hContact;
-	std::string msg;
-	int msgid;
-};
-
 struct ttemplate
 {
 	const char *name;
@@ -52,7 +44,7 @@ static const ttemplate templates[] =
 	{ "Jabber", "jid", LPGEN("JID") },
 	{ "MinecraftDynmap", "Nick", LPGEN("Visible name") },
 	{ "MRA", "e-mail", LPGEN("E-mail address") },
-	{ "MSN", "e-mail", LPGEN("Live ID") },
+	{ "MSN", "wlid", LPGEN("Live ID") },
 	{ "Omegle", "nick", LPGEN("Visible name") },
 	{ "Sametime", "stid", LPGEN("ID") },
 	{ "Skype (SkypeKit)", "sid", LPGEN("Skype name") },

@@ -30,6 +30,19 @@ void FacebookProto::ConnectionFailed()
 	OnShutdown();
 }
 
+void FacebookProto::NotifyDelivery(const CMStringA &szId)
+{
+	__int64 msgid = _atoi64(szId);
+	for (auto &it : arOwnMessages) {
+		if (it->msgId == msgid) {
+			ProtoBroadcastAck(it->hContact, ACKTYPE_MESSAGE, ACKRESULT_SUCCESS, (HANDLE)it->reqId, (LPARAM)szId.c_str());
+			if (g_bMessageState)
+				CallService(MS_MESSAGESTATE_UPDATE, it->hContact, MRD_TYPE_DELIVERED);
+			arOwnMessages.removeItem(&it);
+		}
+	}
+}
+
 void FacebookProto::OnLoggedIn()
 {
 	m_mid = 0;
@@ -42,21 +55,10 @@ void FacebookProto::OnLoggedIn()
 
 	// if sequence is not initialized, request SID from the server
 	if (m_sid == 0) {
-		auto *pReq = CreateRequestGQL(FB_API_QUERY_SEQ_ID);
-		pReq << CHAR_PARAM("query_params", "{\"1\":\"0\"}");
-		pReq->CalcSig();
-
-		JsonReply reply(ExecuteRequest(pReq));
-		if (reply.error()) {
+		if (!RefreshSid()) {
 			ConnectionFailed();
 			return;
 		}
-
-		auto &n = reply.data()["viewer"]["message_threads"];
-		CMStringW wszSid(n["sync_sequence_id"].as_mstring());
-		setWString(DBKEY_SID, wszSid);
-		m_sid = _wtoi64(wszSid);
-		m_iUnread = n["unread_count"].as_int();
 	}
 
 	// point of no return;
@@ -93,14 +95,15 @@ FacebookUser* FacebookProto::AddContact(const CMStringW &wszId, bool bTemp)
 	if (bTemp)
 		Contact_RemoveFromList(hContact);
 
-	auto *ret = new FacebookUser(_wtoi64(wszId), hContact);
+	auto* ret = new FacebookUser(_wtoi64(wszId), hContact);
 	m_users.insert(ret);
+
 	return ret;
 }
 
-FacebookUser* FacebookProto::UserFromJson(const JSONNode &root, CMStringW &wszUserId)
+FacebookUser* FacebookProto::UserFromJson(const JSONNode &root, CMStringW &wszUserId, bool &bIsChat)
 {
-	bool bIsChat = false;
+	bIsChat = false;
 	wszUserId = root["threadKey"]["otherUserFbId"].as_mstring();
 	if (wszUserId.IsEmpty()) {
 		// if only thread id is present, it must be a group chat
@@ -134,6 +137,7 @@ int FacebookProto::RefreshContacts()
 		return iErrorCode;  // unknown error
 
 	bool bNeedUpdate = false;
+	bool bLoadAll = m_bLoadAll;
 
 	for (auto &it : reply.data()["viewer"]["messenger_contacts"]["nodes"]) {
 		auto &n = it["represented_profile"];
@@ -142,9 +146,17 @@ int FacebookProto::RefreshContacts()
 
 		MCONTACT hContact;
 		if (id != m_uid) {
+			bool bIsFriend = bLoadAll || n["friendship_status"].as_mstring() == L"ARE_FRIENDS";
+
 			auto *pUser = FindUser(id);
-			if (pUser == nullptr)
+			if (pUser == nullptr) {
+				if (!bIsFriend)
+					continue;
 				pUser = AddContact(wszId, false);
+			}
+			else if (!bIsFriend)
+				Contact_RemoveFromList(pUser->hContact); // adios!
+
 			hContact = pUser->hContact;
 		}
 		else hContact = 0;
@@ -156,9 +168,9 @@ int FacebookProto::RefreshContacts()
 				CMStringW wszPart(nn["part"].as_mstring());
 				int offset = nn["offset"].as_int(), length = nn["length"].as_int();
 				if (wszPart == L"first")
-					setWString(hContact, DBKEY_FIRST_NAME, wszName.Mid(offset, length));
+					setWString(hContact, "FirstName", wszName.Mid(offset, length));
 				else if (wszPart == L"last")
-					setWString(hContact, DBKEY_LAST_NAME, wszName.Mid(offset, length));
+					setWString(hContact, "LastName", wszName.Mid(offset, length));
 			}
 		}
 
@@ -185,10 +197,111 @@ int FacebookProto::RefreshContacts()
 	return 0;
 }
 
+bool FacebookProto::RefreshSid()
+{
+	auto *pReq = CreateRequestGQL(FB_API_QUERY_SEQ_ID);
+	pReq << CHAR_PARAM("query_params", "{\"1\":\"0\"}");
+	pReq->CalcSig();
+
+	JsonReply reply(ExecuteRequest(pReq));
+	if (reply.error())
+		return false;
+
+	auto &n = reply.data()["viewer"]["message_threads"];
+	CMStringW wszSid(n["sync_sequence_id"].as_mstring());
+	setWString(DBKEY_SID, wszSid);
+	m_sid = _wtoi64(wszSid);
+	m_iUnread = n["unread_count"].as_int();
+	return true;
+}
+
+FacebookUser* FacebookProto::RefreshThread(JSONNode& n) {
+	if (!n["is_group_thread"].as_bool())
+		return nullptr;
+
+	CMStringW chatId(n["thread_key"]["thread_fbid"].as_mstring());
+	CMStringW name(n["name"].as_mstring());
+	if (name.IsEmpty()) {
+		for (auto& u : n["all_participants"]["nodes"]) {
+			auto& ur = u["messaging_actor"];
+			CMStringW userId(ur["id"].as_mstring());
+			if (_wtoi64(userId) == m_uid)
+				continue;
+
+			if (!name.IsEmpty())
+				name.Append(L", ");
+			name += ur["name"].as_mstring();
+		}
+
+		if (name.GetLength() > 128) {
+			name.Truncate(125);
+			name.Append(L"...");
+		}
+	}
+
+	auto* si = Chat_NewSession(GCW_CHATROOM, m_szModuleName, chatId, name);
+	if (si == nullptr)
+		return nullptr;
+
+	setWString(si->hContact, DBKEY_ID, chatId);
+	Chat_AddGroup(si, TranslateT("Participant"));
+
+	for (auto& u : n["all_participants"]["nodes"]) {
+		auto& ur = u["messaging_actor"];
+		CMStringW userId(ur["id"].as_mstring());
+		CMStringW userName(ur["name"].as_mstring());
+
+		GCEVENT gce = { m_szModuleName, 0, GC_EVENT_JOIN };
+		gce.pszID.w = chatId;
+		gce.pszUID.w = userId;
+		gce.pszNick.w = userName;
+		gce.bIsMe = _wtoi64(userId) == m_uid;
+		gce.time = time(0);
+		Chat_Event(&gce);
+	}
+
+	Chat_Control(m_szModuleName, chatId, m_bHideGroupchats ? WINDOW_HIDDEN : SESSION_INITDONE);
+	Chat_Control(m_szModuleName, chatId, SESSION_ONLINE);
+
+	__int64 userId = _wtoi64(chatId);
+	auto* user = FindUser(userId);
+
+	if (user == nullptr) {
+		user = new FacebookUser(userId, si->hContact, true, true);
+		m_users.insert(user);
+	}
+	else {
+		user->hContact = si->hContact;
+		user->bIsChatInitialized = true;
+	}
+
+	return user;
+}
+
+FacebookUser* FacebookProto::RefreshThread(CMStringW& wszId) {
+	auto* pReq = CreateRequestGQL(FB_API_QUERY_THREAD);
+
+	pReq << WCHAR_PARAM("query_params", CMStringW(FORMAT, L"{\"0\":[\"%s\"], \"12\":0, \"13\":\"false\"}", wszId.c_str()));
+	pReq->CalcSig();
+
+	JsonReply reply(ExecuteRequest(pReq));
+	if (!reply.error()) {
+		auto& root = reply.data();
+
+		for (auto& n : root) {
+			return RefreshThread(n);
+		}
+	}
+
+	return nullptr;
+}
+
 void FacebookProto::RefreshThreads()
 {
+	int threadsLimit = 40;
+
 	auto * pReq = CreateRequestGQL(FB_API_QUERY_THREADS);
-	JSONNode json; json << CHAR_PARAM("2", "true") << CHAR_PARAM("12", "false") << CHAR_PARAM("13", "false");
+	JSONNode json; json << INT_PARAM("1", threadsLimit) << CHAR_PARAM("2", "true") << CHAR_PARAM("12", "false") << CHAR_PARAM("13", "false");
 	pReq << CHAR_PARAM("query_params", json.write().c_str());
 	pReq->CalcSig();
 
@@ -197,55 +310,12 @@ void FacebookProto::RefreshThreads()
 		auto &root = reply.data()["viewer"]["message_threads"];
 
 		for (auto &n : root["nodes"]) {
-			if (!n["is_group_thread"].as_bool())
-				continue;
-
-			CMStringW chatId(n["thread_key"]["thread_fbid"].as_mstring());
-			CMStringW name(n["name"].as_mstring());
-			if (name.IsEmpty()) {
-				for (auto &u : n["all_participants"]["nodes"]) {
-					auto &ur = u["messaging_actor"];
-					CMStringW userId(ur["id"].as_mstring());
-					if (_wtoi64(userId) == m_uid)
-						continue;
-
-					if (!name.IsEmpty())
-						name.Append(L", ");
-					name += ur["name"].as_mstring();
-				}
-
-				if (name.GetLength() > 128) {
-					name.Truncate(125);
-					name.Append(L"...");
-				}
-			}
-
-			auto *si = Chat_NewSession(GCW_CHATROOM, m_szModuleName, chatId, name);
-			if (si == nullptr)
-				continue;
-
-			setWString(si->hContact, DBKEY_ID, chatId);
-			Chat_AddGroup(si, TranslateT("Participant"));
-
-			for (auto &u : n["all_participants"]["nodes"]) {
-				auto &ur = u["messaging_actor"];
-				CMStringW userId(ur["id"].as_mstring());
-				CMStringW userName(ur["name"].as_mstring());
-
-				GCEVENT gce = { m_szModuleName, 0, GC_EVENT_JOIN };
-				gce.pszID.w = chatId;
-				gce.pszUID.w = userId;
-				gce.pszNick.w = userName;
-				gce.bIsMe = _wtoi64(userId) == m_uid;
-				gce.time = time(0);
-				Chat_Event(&gce);
-			}
-
-			Chat_Control(m_szModuleName, chatId, m_bHideGroupchats ? WINDOW_HIDDEN : SESSION_INITDONE);
-			Chat_Control(m_szModuleName, chatId, SESSION_ONLINE);
-
-			m_users.insert(new FacebookUser(_wtoi64(chatId), si->hContact, true));
+			if (n["is_group_thread"].as_bool() && n["is_viewer_subscribed"].as_bool() && !n["has_viewer_archived"].as_bool())
+				RefreshThread(n);
 		}
+
+		// TODO: save timestamp of last message/action/... into DB
+		// TODO: lower threadsLimit to 10, load next pages if timestamp of last message is higher than timestamp in DB
 	}
 }
 
@@ -398,6 +468,17 @@ void FacebookProto::OnPublish(const char *topic, const uint8_t *p, size_t cbLen)
 		OnPublishMessage(rdr);
 	else if (!strcmp(topic, "/orca_typing_notifications"))
 		OnPublishUtn(rdr);
+	else if (!strcmp(topic, "/send_message_response"))
+		OnPublishDelivery(rdr);
+}
+
+void FacebookProto::OnPublishDelivery(FbThriftReader &rdr)
+{
+	JSONNode root = JSONNode::parse((const char *)rdr.data());
+	if (root["succeeded"].as_bool()) {
+		CMStringA msgId(root["msgid"].as_mstring());
+		NotifyDelivery(msgId);
+	}
 }
 
 void FacebookProto::OnPublishPresence(FbThriftReader &rdr)
@@ -446,7 +527,7 @@ void FacebookProto::OnPublishPresence(FbThriftReader &rdr)
 
 		rdr.readField(fieldType, fieldId);
 		assert(fieldType == FB_THRIFT_TYPE_I64);
-		assert(fieldId == 1 || fieldId == 4);
+		assert(fieldId == 1 || fieldId == 3 || fieldId == 4);
 		rdr.readInt64(timestamp);
 
 		while (!rdr.isStop()) {
@@ -498,13 +579,17 @@ void FacebookProto::OnPublishMessage(FbThriftReader &rdr)
 
 	CMStringA errorCode = root["errorCode"].as_mstring();
 	if (!errorCode.IsEmpty()) {
-		if (!m_QueueCreated && (errorCode == "ERROR_QUEUE_NOT_FOUND" || errorCode == "ERROR_QUEUE_LOST" )) {
+		if (!m_QueueCreated && (errorCode == "ERROR_QUEUE_OVERFLOW" || errorCode == "ERROR_QUEUE_NOT_FOUND" || errorCode == "ERROR_QUEUE_LOST" || errorCode == "ERROR_QUEUE_EXCEEDS_MAX_DELTAS")) {
 			m_QueueCreated = true; // prevent queue creation request from being sent twice
-			m_szSyncToken.Empty();
-			delSetting(DBKEY_SYNC_TOKEN);
+			delSetting(DBKEY_SYNC_TOKEN); m_szSyncToken.Empty();
+			delSetting(DBKEY_SID);        m_sid = 0;
+			if (!RefreshSid()) {
+				ConnectionFailed();
+				return;
+			}
+
 			MqttQueueConnect();
 		}
-		return;
 	}
 
 	CMStringW str = root["lastIssuedSeqId"].as_mstring();
@@ -580,9 +665,18 @@ void FacebookProto::OnPublishPrivateMessage(const JSONNode &root)
 	}
 
 	CMStringW wszUserId;
-	auto *pUser = UserFromJson(metadata, wszUserId);
-	if (pUser == nullptr)
-		pUser = AddContact(wszUserId);
+	bool bIsChat;
+	auto *pUser = UserFromJson(metadata, wszUserId, bIsChat);
+
+	if (!bIsChat && pUser == nullptr)
+		pUser = AddContact(wszUserId, true);
+	else if (bIsChat && (pUser == nullptr || !pUser->bIsChatInitialized)) // chat room does not exists or is not initialized
+		pUser = RefreshThread(wszUserId);
+	
+	if (pUser == nullptr) {
+		debugLogA("User not found and adding failed, event skipped");
+		return;
+	}
 
 	for (auto &it : metadata["tags"]) {
 		auto *szTagName = it.name();
@@ -595,19 +689,12 @@ void FacebookProto::OnPublishPrivateMessage(const JSONNode &root)
 	}
 
 	CMStringW wszActorFbId(metadata["actorFbId"].as_mstring());
-	CMStringA szId(metadata["messageId"].as_string().c_str());
+	CMStringA szId(metadata["messageId"].as_mstring());
 
 	// messages sent with attachments are returning as deltaNewMessage, not deltaSentMessage
 	__int64 actorFbId = _wtoi64(wszActorFbId);
-	if (m_uid == actorFbId) {
-		for (auto& it : arOwnMessages) {
-			if (it->msgId == offlineId) {
-				ProtoBroadcastAck(pUser->hContact, ACKTYPE_MESSAGE, ACKRESULT_SUCCESS, (HANDLE)it->reqId, (LPARAM)szId.c_str());
-				arOwnMessages.removeItem(&it);
-				break;
-			}
-		}
-	}
+	if (m_uid == actorFbId)
+		NotifyDelivery(szId);
 
 	// parse message body
 	CMStringA szBody(root["body"].as_string().c_str());
@@ -623,7 +710,14 @@ void FacebookProto::OnPublishPrivateMessage(const JSONNode &root)
 
 			bool bSuccess = false;
 			CMStringW wszFileName(FORMAT, L"%s\\STK{%S}.png", wszPath.c_str(), stickerId.c_str());
-			if (GetFileAttributesW(wszFileName) == INVALID_FILE_ATTRIBUTES) {
+			DWORD dwAttrib = GetFileAttributesW(wszFileName);
+			if (dwAttrib == INVALID_FILE_ATTRIBUTES) {
+				wszFileName.Format(L"%s\\STK{%S}.webp", wszPath.c_str(), stickerId.c_str());
+				dwAttrib = GetFileAttributesW(wszFileName);
+			}
+
+			// new sticker
+			if (dwAttrib == INVALID_FILE_ATTRIBUTES) {
 				auto *pReq = CreateRequestGQL(FB_API_QUERY_STICKER);
 				pReq << CHAR_PARAM("query_params", CMStringA(FORMAT, "{\"0\":[\"%s\"]}", stickerId.c_str()));
 				pReq->CalcSig();
@@ -631,22 +725,25 @@ void FacebookProto::OnPublishPrivateMessage(const JSONNode &root)
 				JsonReply reply(ExecuteRequest(pReq));
 				if (!reply.error()) {
 					for (auto &sticker : reply.data()) {
-						for (auto &img : sticker["thread_image"]) {
-							CMStringA szUrl(img.as_mstring());
+						// std::string szUrl = sticker["animated_image"]["uri"].as_string();
+						// if (szUrl.empty())
+						// 	szUrl = sticker["thread_image"]["uri"].as_string();
+						// else
+						// 	wszFileName.Format(L"%s\\STK{%S}.webp", wszPath.c_str(), stickerId.c_str());
+						std::string szUrl = sticker["thread_image"]["uri"].as_string();
 
-							NETLIBHTTPREQUEST req = {};
-							req.cbSize = sizeof(req);
-							req.flags = NLHRF_NODUMP | NLHRF_SSL | NLHRF_HTTP11 | NLHRF_REDIRECT;
-							req.requestType = REQUEST_GET;
-							req.szUrl = szUrl.GetBuffer();
+						NETLIBHTTPREQUEST req = {};
+						req.cbSize = sizeof(req);
+						req.flags = NLHRF_NODUMP | NLHRF_SSL | NLHRF_HTTP11 | NLHRF_REDIRECT;
+						req.requestType = REQUEST_GET;
+						req.szUrl = (char*)szUrl.c_str();
 
-							NETLIBHTTPREQUEST *pReply = Netlib_HttpTransaction(m_hNetlibUser, &req);
-							if (pReply != nullptr && pReply->resultCode == 200 && pReply->pData && pReply->dataLength) {
-								bSuccess = true;
-								FILE *out = _wfopen(wszFileName, L"wb");
-								fwrite(pReply->pData, 1, pReply->dataLength, out);
-								fclose(out);
-							}
+						NETLIBHTTPREQUEST *pReply = Netlib_HttpTransaction(m_hNetlibUser, &req);
+						if (pReply != nullptr && pReply->resultCode == 200 && pReply->pData && pReply->dataLength) {
+							bSuccess = true;
+							FILE *out = _wfopen(wszFileName, L"wb");
+							fwrite(pReply->pData, 1, pReply->dataLength, out);
+							fclose(out);
 						}
 					}
 				}
@@ -658,12 +755,8 @@ void FacebookProto::OnPublishPrivateMessage(const JSONNode &root)
 					szBody += "\r\n";
 				szBody += "STK{" + stickerId + "}";
 
-				SMADD_CONT cont;
-				cont.cbSize = sizeof(SMADD_CONT);
-				cont.hContact = pUser->hContact;
-				cont.type = 1;
-				cont.path = wszFileName.GetBuffer();
-				CallService(MS_SMILEYADD_LOADCONTACTSMILEYS, 0, (LPARAM)&cont);
+				SMADD_CONT cont = { 1, m_szModuleName, wszFileName };
+				CallService(MS_SMILEYADD_LOADCONTACTSMILEYS, 0, LPARAM(&cont));
 			}
 			else szBody += TranslateU("Sticker received");
 		}
@@ -735,6 +828,8 @@ void FacebookProto::OnPublishPrivateMessage(const JSONNode &root)
 		szBody.Replace("%", "%%");
 		ptrW wszText(mir_utf8decodeW(szBody));
 
+		// TODO: GC_EVENT_JOIN for chat participants which are missing (for example added later during group chat)
+
 		GCEVENT gce = { m_szModuleName, 0, GC_EVENT_MESSAGE };
 		gce.pszID.w = wszUserId;
 		gce.dwFlags = GCEF_ADDTOLOG;
@@ -763,7 +858,8 @@ void FacebookProto::OnPublishPrivateMessage(const JSONNode &root)
 void FacebookProto::OnPublishReadReceipt(const JSONNode &root)
 {
 	CMStringW wszUserId;
-	auto *pUser = UserFromJson(root, wszUserId);
+	bool bIsChat;
+	auto *pUser = UserFromJson(root, wszUserId, bIsChat);
 	if (pUser == nullptr) {
 		debugLogA("Message from unknown contact %S, ignored", wszUserId.c_str());
 		return;
@@ -792,7 +888,8 @@ void FacebookProto::OnPublishSentMessage(const JSONNode &root)
 	std::string szId(metadata["messageId"].as_string());
 
 	CMStringW wszUserId;
-	auto *pUser = UserFromJson(metadata, wszUserId);
+	bool bIsChat;
+	auto *pUser = UserFromJson(metadata, wszUserId, bIsChat);
 	if (pUser == nullptr) {
 		debugLogA("Message from unknown contact %s, ignored", wszUserId.c_str());
 		return;

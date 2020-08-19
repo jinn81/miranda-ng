@@ -33,9 +33,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define SETTING_TOOLWINDOW_DEFAULT                1 
 #define SETTING_ONTOP_DEFAULT                     1 
 #define SETTING_MIN2TRAY_DEFAULT                  1 
-#define SETTING_HIDEOFFLINE_DEFAULT               0 
-#define SETTING_HIDEEMPTYGROUPS_DEFAULT           0 
-#define SETTING_USEGROUPS_DEFAULT                 1 
 #define SETTING_PLACEOFFLINETOROOT_DEFAULT        0 
 #define SETTING_DISABLETRAYFLASH_DEFAULT          0 
 #define SETTING_ICONFLASHTIME_DEFAULT           550 
@@ -44,7 +41,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define SETTING_WINDOWSHADOW_DEFAULT              0 
 #define SETTING_ONDESKTOP_DEFAULT                 0 
 #define SETTING_DISABLEWORKINGSET_DEFAULT         1 
-#define SETTING_NOICONBLINF_DEFAULT               0 
 #define SETTING_ALWAYSVISICON_DEFAULT             0 
 														    
 #define SETTING_SHOWMAINMENU_DEFAULT              1 
@@ -146,7 +142,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define SETTING_ALIGNRIGHTORIGHT_DEFAULT          1 
 #define SETTING_HIDEGROUPSICON_DEFAULT            0 
 #define SETTING_ALIGNGROPCAPTION_DEFAULT          0 
-#define SETTINS_ROWITEMORDER_DEFAULT              {ITEM_AVATAR, ITEM_ICON, ITEM_TEXT, ITEM_CONTACT_TIME, ITEM_EXTRA_ICONS}
 
 #define SETTINGS_SHOWAVATARS_DEFAULT              0 
 #define SETTINGS_AVATARDRAWBORDER_DEFAULT         0 
@@ -198,7 +193,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define SETTING_TRANSPARENT_DEFAULT               0 
 #define SETTING_AUTOALPHA_DEFAULT               150 
-#define SETTING_CONFIRMDELETE_DEFAULT             1 
 #define SETTING_AUTOHIDE_DEFAULT                  0 
 #define SETTING_HIDETIME_DEFAULT                 30 
 #define SETTING_CYCLETIME_DEFAULT                 4 

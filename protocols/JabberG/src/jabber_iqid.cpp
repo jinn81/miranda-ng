@@ -89,23 +89,20 @@ void CJabberProto::OnIqResultNestedRosterGroups(const TiXmlElement *iqNode, CJab
 		bPrivateStorageSupport = true;
 		auto *xmlDelimiter = XmlGetChildByTag(XmlGetChildByTag(iqNode, "query", "xmlns", JABBER_FEAT_PRIVATE_STORAGE), "roster", "xmlns", JABBER_FEAT_NESTED_ROSTER_GROUPS);
 		if (xmlDelimiter)
-			szGroupDelimiter = xmlDelimiter->GetText();
+			if (!mir_strcmp(szGroupDelimiter = xmlDelimiter->GetText(), "\\"))
+				szGroupDelimiter = nullptr;
 	}
 
-	// global fuckup
-	if (m_ThreadInfo == nullptr)
-		return;
-
 	// is our default delimiter?
-	if ((!szGroupDelimiter && bPrivateStorageSupport) || (szGroupDelimiter && mir_strcmp(szGroupDelimiter, "\\")))
+	if (!szGroupDelimiter && bPrivateStorageSupport)
 		m_ThreadInfo->send(
 			XmlNodeIq("set", SerialNext()) << XQUERY(JABBER_FEAT_PRIVATE_STORAGE)
 				<< XCHILD("roster", "\\") << XATTR("xmlns", JABBER_FEAT_NESTED_ROSTER_GROUPS));
 
 	// roster request
-	char *szUserData = mir_strdup(szGroupDelimiter ? szGroupDelimiter : "\\");
+	m_szGroupDelimiter = mir_strdup(szGroupDelimiter);
 	m_ThreadInfo->send(
-		XmlNodeIq(AddIQ(&CJabberProto::OnIqResultGetRoster, JABBER_IQ_TYPE_GET, nullptr, szUserData))
+		XmlNodeIq(AddIQ(&CJabberProto::OnIqResultGetRoster, JABBER_IQ_TYPE_GET))
 			<< XCHILDNS("query", JABBER_FEAT_IQ_ROSTER));
 }
 
@@ -130,13 +127,20 @@ void CJabberProto::OnProcessLoginRq(ThreadData *info, DWORD rq)
 			EnableArchive(m_bEnableMsgArchive != 0);
 
 		if (info->jabberServerCaps & JABBER_CAPS_CARBONS)
-			EnableCarbons(m_bEnableCarbons != 0);
+			// Server seems to support carbon copies, let's enable/disable them
+			m_ThreadInfo->send(XmlNodeIq("set", SerialNext()) << XCHILDNS((m_bEnableCarbons) ? "enable" : "disable", JABBER_FEAT_CARBONS));
+
+		// Server seems to support MAM, let's retrieve MAM settings
+		if (info->jabberServerCaps & JABBER_CAPS_MAM)
+			m_ThreadInfo->send(XmlNodeIq(AddIQ(&CJabberProto::OnIqResultMamInfo, JABBER_IQ_TYPE_GET, 0, this)) << XCHILDNS("prefs", JABBER_FEAT_MAM));
 
 		if (m_bAutoJoinBookmarks) {
 			LIST<JABBER_LIST_ITEM> ll(10);
 			LISTFOREACH(i, this, LIST_BOOKMARK)
 			{
 				JABBER_LIST_ITEM *item = ListGetItemPtrFromIndex(i);
+				debugLogA("BOOKMARK #%d: %s %s", i, item->type, item->jid);
+
 				if (item != nullptr && !mir_strcmp(item->type, "conference") && item->bAutoJoin)
 					ll.insert(item);
 			}
@@ -167,6 +171,7 @@ void CJabberProto::OnProcessLoginRq(ThreadData *info, DWORD rq)
 
 void CJabberProto::OnLoggedIn()
 {
+	m_bMamPrefsAvailable = false;
 	m_bJabberOnline = true;
 	m_tmJabberLoggedInTime = time(0);
 
@@ -277,8 +282,8 @@ void CJabberProto::OnIqResultSetAuth(const TiXmlElement *iqNode, CJabberIqInfo*)
 	if ((type = XmlGetAttr(iqNode, "type")) == nullptr) return;
 
 	if (!mir_strcmp(type, "result")) {
-		ptrA tszNick(getUStringA("Nick"));
-		if (tszNick == nullptr)
+		ptrA szNick(getUStringA("Nick"));
+		if (!mir_strlen(szNick))
 			setUString("Nick", m_ThreadInfo->conn.username);
 
 		OnLoggedIn();
@@ -359,7 +364,6 @@ void CJabberProto::GroupchatJoinByHContact(MCONTACT hContact, bool autojoin)
 void CJabberProto::OnIqResultGetRoster(const TiXmlElement *iqNode, CJabberIqInfo *pInfo)
 {
 	debugLogA("<iq/> iqIdGetRoster");
-	ptrA szGroupDelimiter((char *)pInfo->GetUserData());
 	if (pInfo->GetIqType() != JABBER_IQ_TYPE_RESULT)
 		return;
 
@@ -369,9 +373,6 @@ void CJabberProto::OnIqResultGetRoster(const TiXmlElement *iqNode, CJabberIqInfo
 
 	if (mir_strcmp(XmlGetAttr(queryNode, "xmlns"), JABBER_FEAT_IQ_ROSTER))
 		return;
-
-	if (!mir_strcmp(szGroupDelimiter, "\\"))
-		szGroupDelimiter = nullptr;
 
 	LIST<void> chatRooms(10);
 	OBJLIST<JABBER_HTTP_AVATARS> *httpavatars = new OBJLIST<JABBER_HTTP_AVATARS>(20, JABBER_HTTP_AVATARS::compare);
@@ -406,52 +407,20 @@ void CJabberProto::OnIqResultGetRoster(const TiXmlElement *iqNode, CJabberIqInfo
 		item->subscription = sub;
 		item->bRealContact = true;
 
-		mir_free(item->nick); item->nick = nick;
+		replaceStr(item->nick, nick);
 		replaceStr(item->group, XmlGetChildText(itemNode, "group"));
-
-		// check group delimiters
-		if (item->group && szGroupDelimiter) {
-			CMStringA szNewGroup(item->group);
-			szNewGroup.Replace(szGroupDelimiter, "\\");
-			replaceStr(item->group, szNewGroup.Detach());
-		}
-
-		if (name != nullptr) {
-			ptrA tszNick(getUStringA(hContact, "Nick"));
-			if (tszNick != nullptr) {
-				if (mir_strcmp(nick, tszNick) != 0)
-					db_set_utf(hContact, "CList", "MyHandle", nick);
-				else
-					db_unset(hContact, "CList", "MyHandle");
-			}
-			else db_set_utf(hContact, "CList", "MyHandle", nick);
-		}
-		else db_unset(hContact, "CList", "MyHandle");
+		UpdateItem(item, name);
 
 		if (isChatRoom(hContact)) {
-			char *wszTitle = NEWSTR_ALLOCA(jid);
-			if (char *p = strchr(wszTitle, '@')) *p = 0;
-			Chat_NewSession(GCW_CHATROOM, m_szModuleName, Utf2T(jid), Utf2T(wszTitle));
+			char *szTitle = NEWSTR_ALLOCA(jid);
+			if (char *p = strchr(szTitle, '@'))
+				*p = 0;
+			Chat_NewSession(GCW_CHATROOM, m_szModuleName, Utf2T(jid), Utf2T(szTitle));
 
 			Contact_Hide(hContact, false);
 			chatRooms.insert((HANDLE)hContact);
 		}
 		else UpdateSubscriptionInfo(hContact, item);
-
-		if (!m_bIgnoreRosterGroups) {
-			if (item->group != nullptr) {
-				Clist_GroupCreate(0, Utf2T(item->group));
-
-				// Don't set group again if already correct, or Miranda may show wrong group count in some case
-				ptrA tszGroup(db_get_utfa(hContact, "CList", "Group"));
-				if (tszGroup != nullptr) {
-					if (mir_strcmp(tszGroup, item->group))
-						db_set_utf(hContact, "CList", "Group", item->group);
-				}
-				else db_set_utf(hContact, "CList", "Group", item->group);
-			}
-			else db_unset(hContact, "CList", "Group");
-		}
 
 		if (hContact != 0) {
 			if (bIsTransport)
@@ -491,61 +460,13 @@ void CJabberProto::OnIqResultGetRoster(const TiXmlElement *iqNode, CJabberIqInfo
 		for (auto &it : chatRooms)
 			GroupchatJoinByHContact((DWORD_PTR)it, true);
 
-	UI_SAFE_NOTIFY_HWND(m_hwndJabberAddBookmark, WM_JABBER_CHECK_ONLINE);
-	WindowList_Broadcast(m_hWindowList, WM_JABBER_CHECK_ONLINE, 0, 0);
+	UI_SAFE_NOTIFY_HWND(m_hwndJabberAddBookmark, WM_PROTO_CHECK_ONLINE);
+	WindowList_Broadcast(m_hWindowList, WM_PROTO_CHECK_ONLINE, 0, 0);
 
 	UI_SAFE_NOTIFY(m_pDlgServiceDiscovery, WM_JABBER_TRANSPORT_REFRESH);
 
-	if (szGroupDelimiter)
-		mir_free(szGroupDelimiter);
-
 	OnProcessLoginRq(m_ThreadInfo, JABBER_LOGIN_ROSTER);
 	RebuildInfoFrame();
-}
-
-void CJabberProto::OnIqResultGetRegister(const TiXmlElement *iqNode, CJabberIqInfo*)
-{
-	// RECVED: result of the request for (agent) registration mechanism
-	// ACTION: activate (agent) registration input dialog
-	debugLogA("<iq/> iqIdGetRegister");
-
-	const TiXmlElement *queryNode;
-	const char *type;
-	if ((type = XmlGetAttr(iqNode, "type")) == nullptr) return;
-	if ((queryNode = XmlFirstChild(iqNode, "query")) == nullptr) return;
-
-	if (!mir_strcmp(type, "result")) {
-		if (m_hwndAgentRegInput)
-			SendMessage(m_hwndAgentRegInput, WM_JABBER_REGINPUT_ACTIVATE, 1 /*success*/, (LPARAM)iqNode);
-	}
-	else if (!mir_strcmp(type, "error")) {
-		if (m_hwndAgentRegInput)
-			SendMessage(m_hwndAgentRegInput, WM_JABBER_REGINPUT_ACTIVATE, 0 /*error*/, (LPARAM)JabberErrorMsg(iqNode).c_str());
-	}
-}
-
-void CJabberProto::OnIqResultSetRegister(const TiXmlElement *iqNode, CJabberIqInfo*)
-{
-	// RECVED: result of registration process
-	// ACTION: notify of successful agent registration
-	debugLogA("<iq/> iqIdSetRegister");
-
-	const char *type, *from;
-	if ((type = XmlGetAttr(iqNode, "type")) == nullptr) return;
-	if ((from = XmlGetAttr(iqNode, "from")) == nullptr) return;
-
-	if (!mir_strcmp(type, "result")) {
-		MCONTACT hContact = HContactFromJID(from);
-		if (hContact != 0)
-			setByte(hContact, "IsTransport", true);
-
-		if (m_hwndRegProgress)
-			SendMessage(m_hwndRegProgress, WM_JABBER_REGDLG_UPDATE, 100, (LPARAM)TranslateT("Registration successful"));
-	}
-	else if (!mir_strcmp(type, "error")) {
-		if (m_hwndRegProgress)
-			SendMessage(m_hwndRegProgress, WM_JABBER_REGDLG_UPDATE, 100, (LPARAM)JabberErrorMsg(iqNode).c_str());
-	}
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -658,12 +579,12 @@ void CJabberProto::OnIqResultGetVcard(const TiXmlElement *iqNode, CJabberIqInfo*
 				psr.email.a = (char*)XmlGetChildText(vCardNode, "EMAIL");
 				psr.id.a = NEWSTR_ALLOCA(jid);
 				ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_DATA, (HANDLE)id, (LPARAM)&psr);
-				ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SUCCESS, (HANDLE)id, 0);
+				ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SUCCESS, (HANDLE)id);
 			}
 			else if (!mir_strcmp(type, "error"))
-				ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SUCCESS, (HANDLE)id, 0);
+				ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SUCCESS, (HANDLE)id);
 		}
-		else ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SUCCESS, (HANDLE)id, 0);
+		else ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SUCCESS, (HANDLE)id);
 		return;
 	}
 
@@ -1106,7 +1027,7 @@ void CJabberProto::OnIqResultGetVcard(const TiXmlElement *iqNode, CJabberIqInfo*
 	if (!hasPhoto) {
 		debugLogA("Has no avatar");
 		if (!delSetting(hContact, "AvatarHash"))
-			ProtoBroadcastAck(hContact, ACKTYPE_AVATAR, ACKRESULT_SUCCESS, nullptr, 0);
+			ProtoBroadcastAck(hContact, ACKTYPE_AVATAR, ACKRESULT_SUCCESS, nullptr);
 	}
 	
 	if (id == m_ThreadInfo->resolveID) {
@@ -1174,10 +1095,10 @@ void CJabberProto::OnIqResultSetSearch(const TiXmlElement *iqNode, CJabberIqInfo
 			}
 		}
 
-		ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SUCCESS, (HANDLE)id, 0);
+		ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SUCCESS, (HANDLE)id);
 	}
 	else if (!mir_strcmp(type, "error"))
-		ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SUCCESS, (HANDLE)id, 0);
+		ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SUCCESS, (HANDLE)id);
 }
 
 void CJabberProto::OnIqResultExtSearch(const TiXmlElement *iqNode, CJabberIqInfo*)
@@ -1235,10 +1156,10 @@ void CJabberProto::OnIqResultExtSearch(const TiXmlElement *iqNode, CJabberIqInfo
 			replaceStrW(psr.email.w, 0);
 		}
 
-		ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SUCCESS, (HANDLE)id, 0);
+		ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SUCCESS, (HANDLE)id);
 	}
 	else if (!mir_strcmp(type, "error"))
-		ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SUCCESS, (HANDLE)id, 0);
+		ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SUCCESS, (HANDLE)id);
 }
 
 void CJabberProto::OnIqResultSetPassword(const TiXmlElement *iqNode, CJabberIqInfo*)
@@ -1280,7 +1201,7 @@ void CJabberProto::OnIqResultGetVCardAvatar(const TiXmlElement *iqNode, CJabberI
 
 	if (vCard->NoChildren()) {
 		if (!delSetting(hContact, "AvatarHash"))
-			ProtoBroadcastAck(hContact, ACKTYPE_AVATAR, ACKRESULT_SUCCESS, nullptr, 0);
+			ProtoBroadcastAck(hContact, ACKTYPE_AVATAR, ACKRESULT_SUCCESS, nullptr);
 		return;
 	}
 
@@ -1373,10 +1294,10 @@ void CJabberProto::OnIqResultGotAvatar(MCONTACT hContact, const char *pszText, c
 
 		char buffer[41];
 		setString(hContact, "AvatarHash", bin2hex(digest, sizeof(digest), buffer));
-		ProtoBroadcastAck(hContact, ACKTYPE_AVATAR, ACKRESULT_SUCCESS, HANDLE(&ai), 0);
+		ProtoBroadcastAck(hContact, ACKTYPE_AVATAR, ACKRESULT_SUCCESS, HANDLE(&ai));
 		debugLogW(L"Broadcast new avatar: %s", ai.filename);
 	}
-	else ProtoBroadcastAck(hContact, ACKTYPE_AVATAR, ACKRESULT_FAILED, HANDLE(&ai), 0);
+	else ProtoBroadcastAck(hContact, ACKTYPE_AVATAR, ACKRESULT_FAILED, HANDLE(&ai));
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -1414,6 +1335,7 @@ void CJabberProto::OnIqResultDiscoBookmarks(const TiXmlElement *iqNode, CJabberI
 						const char *autoJ = XmlGetAttr(itemNode, "autojoin");
 						if (autoJ != nullptr)
 							item->bAutoJoin = !mir_strcmp(autoJ, "true") || !mir_strcmp(autoJ, "1");
+						debugLogA("+BOOKMARK %s %s", item->type, item->jid);
 					}
 					else if (!mir_strcmp(name, "url") && (jid = XmlGetAttr(itemNode, "url"))) {
 						JABBER_LIST_ITEM *item = ListAdd(LIST_BOOKMARK, jid);
@@ -1424,7 +1346,7 @@ void CJabberProto::OnIqResultDiscoBookmarks(const TiXmlElement *iqNode, CJabberI
 				}
 			}
 
-			UI_SAFE_NOTIFY(m_pDlgBookmarks, WM_JABBER_REFRESH);
+			UI_SAFE_NOTIFY(m_pDlgBookmarks, WM_PROTO_REFRESH);
 			m_ThreadInfo->bBookmarksLoaded = true;
 			OnProcessLoginRq(m_ThreadInfo, JABBER_LOGIN_BOOKMARKS);
 		}
@@ -1433,7 +1355,7 @@ void CJabberProto::OnIqResultDiscoBookmarks(const TiXmlElement *iqNode, CJabberI
 		if (m_ThreadInfo->jabberServerCaps & JABBER_CAPS_PRIVATE_STORAGE) {
 			m_ThreadInfo->jabberServerCaps &= ~JABBER_CAPS_PRIVATE_STORAGE;
 			EnableMenuItems(true);
-			UI_SAFE_NOTIFY(m_pDlgBookmarks, WM_JABBER_ACTIVATE);
+			UI_SAFE_NOTIFY(m_pDlgBookmarks, WM_PROTO_ACTIVATE);
 		}
 	}
 }
@@ -1481,11 +1403,11 @@ void CJabberProto::OnIqResultSetBookmarks(const TiXmlElement *iqNode, CJabberIqI
 		return;
 
 	if (!mir_strcmp(type, "result")) {
-		UI_SAFE_NOTIFY(m_pDlgBookmarks, WM_JABBER_REFRESH);
+		UI_SAFE_NOTIFY(m_pDlgBookmarks, WM_PROTO_REFRESH);
 	}
 	else if (!mir_strcmp(type, "error")) {
 		MessageBox(nullptr, JabberErrorMsg(iqNode), TranslateT("Jabber Bookmarks Error"), MB_OK | MB_SETFOREGROUND);
-		UI_SAFE_NOTIFY(m_pDlgBookmarks, WM_JABBER_ACTIVATE);
+		UI_SAFE_NOTIFY(m_pDlgBookmarks, WM_PROTO_ACTIVATE);
 	}
 }
 

@@ -154,17 +154,11 @@ CSendLaterJob::~CSendLaterJob()
 CSendLater::CSendLater() :
 	m_sendLaterContactList(5, PtrKeySortT),
 	m_sendLaterJobList(5),
-	m_currJob(-1),
-	m_hwndDlg(nullptr),
-	m_hwndList(nullptr),
-	m_hwndFilter(nullptr),
-	m_hFilter(0)
+	m_fAvail(SRMSGMOD_T, "sendLaterAvail", false),
+	m_fErrorPopups(SRMSGMOD_T, "qmgrErrorPopups", false),
+	m_fSuccessPopups(SRMSGMOD_T, "qmgrSuccessPopups", false)
 {
-	m_fAvail = M.GetByte("sendLaterAvail", 0) != 0;
 	m_last_sendlater_processed = time(0);
-	m_fIsInteractive = false;
-	m_fErrorPopups = M.GetByte("qmgrErrorPopups", 0) != 0;
-	m_fSuccessPopups = M.GetByte("qmgrSuccessPopups", 0) != 0;
 }
 
 // clear all open send jobs. Only called on system shutdown to remove
@@ -304,7 +298,7 @@ int CSendLater::addJob(const char *szSetting, void *lParam)
 
 	CSendLaterJob *job = new CSendLaterJob;
 
-	strncpy(job->szId, szSetting, 20);
+	strncpy_s(job->szId, szSetting, _TRUNCATE);
 	job->szId[19] = 0;
 	job->hContact = hContact;
 	job->created = atol(&szSetting[1]);
@@ -686,14 +680,11 @@ INT_PTR CALLBACK CSendLater::DlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
 		if (((LPNMHDR)lParam)->hwndFrom == m_hwndList) {
 			switch (((LPNMHDR)lParam)->code) {
 			case NM_RCLICK:
-				HMENU hMenu = ::LoadMenu(g_plugin.getInst(), MAKEINTRESOURCE(IDR_TABCONTEXT));
-				HMENU hSubMenu = ::GetSubMenu(hMenu, 9);
-				::TranslateMenu(hSubMenu);
-
 				POINT pt;
 				::GetCursorPos(&pt);
 
 				// copy to clipboard only allowed with a single selection
+				HMENU hSubMenu = ::GetSubMenu(PluginConfig.g_hMenuContext, 7);
 				if (::SendMessage(m_hwndList, LVM_GETSELECTEDCOUNT, 0, 0) == 1)
 					::EnableMenuItem(hSubMenu, ID_QUEUEMANAGER_COPYMESSAGETOCLIPBOARD, MF_ENABLED);
 
@@ -711,7 +702,6 @@ INT_PTR CALLBACK CSendLater::DlgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
 					::SendMessage(hwnd, WM_COMMAND, MAKEWPARAM(IDC_QMGR_REMOVE, LOWORD(selection)), 0);
 					m_last_sendlater_processed = 0;			// force a queue check
 				}
-				::DestroyMenu(hMenu);
 				m_fIsInteractive = false;
 				break;
 			}

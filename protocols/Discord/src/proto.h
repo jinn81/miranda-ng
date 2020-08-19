@@ -21,6 +21,19 @@ struct AsyncHttpRequest : public MTHttpRequest<CDiscordProto>
 	bool m_bMainSite;
 };
 
+class JsonReply
+{
+	JSONNode *m_root = nullptr;
+	int m_errorCode = 0;
+
+public:
+	JsonReply(NETLIBHTTPREQUEST *);
+	~JsonReply();
+
+	__forceinline JSONNode& data() const { return *m_root; }
+	__forceinline operator bool() const { return m_errorCode == 200; }
+};
+
 /////////////////////////////////////////////////////////////////////////////////////////
 
 struct CDiscordRole : public MZeroedObject
@@ -123,6 +136,22 @@ struct CDiscordVoiceCall
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
+#define OPCODE_DISPATCH              0
+#define OPCODE_HEARTBEAT             1
+#define OPCODE_IDENTIFY              2
+#define OPCODE_STATUS_UPDATE         3
+#define OPCODE_VOICE_UPDATE          4
+#define OPCODE_VOICE_PING            5
+#define OPCODE_RESUME                6
+#define OPCODE_RECONNECT             7
+#define OPCODE_REQUEST_MEMBERS       8
+#define OPCODE_INVALID_SESSION       9
+#define OPCODE_HELLO                10
+#define OPCODE_HEARTBEAT_ACK        11
+#define OPCODE_REQUEST_SYNC         12
+#define OPCODE_REQUEST_SYNC_GROUP   13
+#define OPCODE_REQUEST_SYNC_CHANNEL 14
+
 class CDiscordProto : public PROTO<CDiscordProto>
 {
 	friend struct AsyncHttpRequest;
@@ -159,7 +188,6 @@ class CDiscordProto : public PROTO<CDiscordProto>
 	void __cdecl SendFileThread(void*);
 	void __cdecl ServerThread(void*);
 	void __cdecl SearchThread(void *param);
-	void __cdecl SendMessageAckThread(void* param);
 	void __cdecl BatchChatCreate(void* param);
 	void __cdecl GetAwayMsgThread(void *param);
 
@@ -171,7 +199,7 @@ class CDiscordProto : public PROTO<CDiscordProto>
 
 	wchar_t *m_wszStatusMsg[MAX_STATUS_COUNT];
 
-	ptrA m_szAccessToken;
+	ptrA m_szAccessToken, m_szTempToken;
 
 	mir_cs m_csHttpQueue;
 	HANDLE m_evRequestsQueue;
@@ -179,6 +207,7 @@ class CDiscordProto : public PROTO<CDiscordProto>
 	
 	void ExecuteRequest(AsyncHttpRequest *pReq);
 	void Push(AsyncHttpRequest *pReq, int iTimeout = 10000);
+	void SaveToken(const JSONNode &data);
 
 	HANDLE m_hWorkerThread;       // worker thread handle
 	HNETLIBCONN m_hAPIConnection; // working connection
@@ -202,11 +231,12 @@ class CDiscordProto : public PROTO<CDiscordProto>
 	bool  GatewayThreadWorker(void);
 	
 	void  GatewaySend(const JSONNode &pNode);
-	void  GatewayProcess(const JSONNode &pNode);
+	bool  GatewayProcess(const JSONNode &pNode);
 
 	void  GatewaySendHeartbeat(void);
 	void  GatewaySendIdentify(void);
 	void  GatewaySendResume(void);
+	void  GatewaySendStatus(int iStatus, const wchar_t *pwszStatusText);
 
 	GatewayHandlerFunc GetHandler(const wchar_t*);
 
@@ -272,6 +302,7 @@ class CDiscordProto : public PROTO<CDiscordProto>
 
 	void ProcessGuild(const JSONNode &json);
 	CDiscordUser* ProcessGuildChannel(CDiscordGuild *guild, const JSONNode &json);
+	void ProcessPresence(const JSONNode &json);
 	void ProcessRole(CDiscordGuild *guild, const JSONNode &json);
 	void ProcessType(CDiscordUser *pUser, const JSONNode &json);
 
@@ -337,12 +368,13 @@ public:
 
 	INT_PTR __cdecl RequestFriendship(WPARAM, LPARAM);
 	INT_PTR __cdecl SvcCreateAccMgrUI(WPARAM, LPARAM);
-	INT_PTR __cdecl SvcGetEventIcon(WPARAM, LPARAM);
 
 	INT_PTR __cdecl GetAvatarCaps(WPARAM, LPARAM);
 	INT_PTR __cdecl GetAvatarInfo(WPARAM, LPARAM);
 	INT_PTR __cdecl GetMyAvatar(WPARAM, LPARAM);
 	INT_PTR __cdecl SetMyAvatar(WPARAM, LPARAM);
+
+	INT_PTR __cdecl VoiceCaps(WPARAM, LPARAM);
 
 	//////////////////////////////////////////////////////////////////////////////////////
 	// Events
@@ -351,6 +383,8 @@ public:
 	int  __cdecl OnAccountChanged(WPARAM, LPARAM);
 	int  __cdecl OnDbEventRead(WPARAM, LPARAM);
 	
+	int  __cdecl OnVoiceState(WPARAM, LPARAM);
+
 	//////////////////////////////////////////////////////////////////////////////////////
 	// dispatch commands
 
@@ -386,8 +420,10 @@ public:
 	void OnReceiveCreateChannel(NETLIBHTTPREQUEST*, AsyncHttpRequest*);
 	void OnReceiveFile(NETLIBHTTPREQUEST*, AsyncHttpRequest*);
 	void OnReceiveGateway(NETLIBHTTPREQUEST*, AsyncHttpRequest*);
+	void OnReceiveMarkRead(NETLIBHTTPREQUEST *, AsyncHttpRequest *);
 	void OnReceiveMessageAck(NETLIBHTTPREQUEST*, AsyncHttpRequest*);
-	void OnReceiveToken(NETLIBHTTPREQUEST*, AsyncHttpRequest*);
+	void OnReceiveToken(NETLIBHTTPREQUEST *, AsyncHttpRequest *);
+	void OnReceiveUserinfo(NETLIBHTTPREQUEST *, AsyncHttpRequest *);
 
 	void RetrieveMyInfo();
 	void OnReceiveMyInfo(NETLIBHTTPREQUEST*, AsyncHttpRequest*);
@@ -414,6 +450,8 @@ public:
 struct CMPlugin : public ACCPROTOPLUGIN<CDiscordProto>
 {
 	CMPlugin();
+
+	bool bVoiceService = false;
 
 	int Load() override;
 };

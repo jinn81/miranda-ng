@@ -50,21 +50,7 @@ LONG_PTR CALLBACK HotkeyHandlerDlgProc(HWND hwndDlg, UINT msg, WPARAM wParam, LP
 
 int   TSAPI NEN_ReadOptions(NEN_OPTIONS *options);
 int   TSAPI NEN_WriteOptions(NEN_OPTIONS *options);
-int   TSAPI UpdateTrayMenu(const CMsgDialog *dat, WORD wStatus, const char *szProto, const wchar_t *szStatus, MCONTACT hContact, DWORD fromEvent);
 void  TSAPI DeletePopupsForContact(MCONTACT hContact, DWORD dwMask);
-
-/*
- * tray stuff
- */
-
-void  TSAPI CreateSystrayIcon(int create);
-void  TSAPI FlashTrayIcon(HICON hIcon);
-void  TSAPI UpdateTrayMenuState(CMsgDialog *dat, BOOL bForced);
-void  TSAPI LoadFavoritesAndRecent();
-void  TSAPI AddContactToFavorites(MCONTACT hContact, const wchar_t *szNickname, const char *szProto, wchar_t *szStatus,
-	WORD wStatus, HICON hIcon, BOOL mode, HMENU hMenu);
-void  TSAPI CreateTrayMenus(int mode);
-void  TSAPI HandleMenuEntryFromhContact(MCONTACT iSelection);
 
 /*
  * gneric msgwindow functions(creation, container management etc.)
@@ -84,15 +70,15 @@ int   TSAPI GetTabItemFromMouse(HWND hwndTab, POINT *pt);
 void  TSAPI CloseOtherTabs(HWND hwndTab, CMsgDialog &dat);
 int   TSAPI ActivateTabFromHWND(HWND hwndTab, HWND hwnd);
 
+void  TSAPI AutoCreateWindow(MCONTACT, MEVENT);
 void  TSAPI CloseAllContainers();
 void  TSAPI DeleteContainer(int iIndex);
 void  TSAPI RenameContainer(int iIndex, const wchar_t *newName);
 void  TSAPI GetContainerNameForContact(MCONTACT hContact, wchar_t *szName, int iNameLen);
 HMENU TSAPI BuildContainerMenu();
 
-int TSAPI MessageWindowOpened(MCONTACT hContact, HWND hwnd);
+int TSAPI MessageWindowOpened(MCONTACT hContact, CMsgDialog *pDlg);
 
-LRESULT CALLBACK IEViewSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK HPPKFSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 /*
@@ -139,12 +125,5 @@ int   TN_ModuleDeInit();
 void  TN_TypingMessage(MCONTACT hContact, int iMode);
 
 void TSAPI DrawMenuItem(DRAWITEMSTRUCT *dis, HICON hIcon, DWORD dwIdle);
-
-/*
- * dialog procedures
- */
-
-INT_PTR CALLBACK SelectContainerDlgProc(HWND hwndDlg, UINT msg, WPARAM wParam, LPARAM lParam);
-INT_PTR CALLBACK DlgProcContainerOptions(HWND hwndDlg, UINT msg, WPARAM wParam, LPARAM lParam);
 
 #endif /* _TABSRMM_FUNCTIONS_H */

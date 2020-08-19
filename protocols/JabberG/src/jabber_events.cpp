@@ -36,7 +36,7 @@ void CJabberProto::OnContactDeleted(MCONTACT hContact)
 	if (!m_bJabberOnline)	// should never happen
 		return;
 
-	ptrA jid(getUStringA(hContact, isChatRoom(hContact) ? "ChatRoomID" : "jid"));
+	ptrA jid(ContactToJID(hContact));
 	if (jid == nullptr)
 		return;
 
@@ -55,6 +55,9 @@ void CJabberProto::OnContactDeleted(MCONTACT hContact)
 
 		ListRemove(LIST_ROSTER, jid);
 	}
+
+	if (isChatRoom(hContact))
+		ListRemove(LIST_CHATROOM, jid);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -144,8 +147,8 @@ void __cdecl CJabberProto::OnAddContactForever(MCONTACT hContact)
 	AddContactToRoster(jid, nick, T2Utf(ptrW(Clist_GetGroup(hContact))));
 
 	XmlNode xPresence("presence"); xPresence << XATTR("to", jid) << XATTR("type", "subscribe");
-	ptrA myNick(getUStringA(0, "Nick"));
-	if (myNick != nullptr)
+	ptrA myNick(getUStringA("Nick"));
+	if (myNick != nullptr && !m_bIgnoreRoster)
 		xPresence << XCHILD("nick", myNick) << XATTR("xmlns", JABBER_FEAT_NICK);
 	m_ThreadInfo->send(xPresence);
 

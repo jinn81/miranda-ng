@@ -28,19 +28,24 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // basic class - provides interface for various Jabber auth
 
-class TJabberAuth
+class TJabberAuth : public MZeroedObject
 {
-protected:  bool bIsValid;
-            const char* szName;
+protected:  bool bIsValid = true;
+            ptrA szName;
             unsigned complete;
+				int priority;
             ThreadData *info;
 public:
-            TJabberAuth(ThreadData*);
+            TJabberAuth(ThreadData *pInfo, const char *pszMech);
 	virtual ~TJabberAuth();
 
 	virtual	char* getInitialRequest();
 	virtual	char* getChallenge(const char *challenge);
-	virtual	bool validateLogin(const char *challenge);
+	virtual	bool  validateLogin(const char *challenge);
+
+	static   int compare(const TJabberAuth *p1, const TJabberAuth *p2)
+				{	return p2->priority - p1->priority; // reverse sorting order
+				}
 
 	inline   const char* getName() const
 				{	return szName;
@@ -59,11 +64,10 @@ class TPlainAuth : public TJabberAuth
 
 	bool bOld;
 
+public:
+	TPlainAuth(ThreadData*, bool);
 
-public:		TPlainAuth(ThreadData*, bool);
-	virtual ~TPlainAuth();
-
-	virtual	char* getInitialRequest();
+	char* getInitialRequest() override;
 };
 
 // md5 auth - digest-based authorization
@@ -72,26 +76,29 @@ class TMD5Auth : public TJabberAuth
 {
 	typedef TJabberAuth CSuper;
 
-				int iCallCount;
+	int iCallCount;
 public:
-				TMD5Auth(ThreadData*);
-	virtual ~TMD5Auth();
+	TMD5Auth(ThreadData*);
+	~TMD5Auth();
 
-	virtual	char* getChallenge(const char *challenge);
+	char* getChallenge(const char *challenge) override;
 };
 
 class TScramAuth : public TJabberAuth
 {
 	typedef TJabberAuth CSuper;
 
-				char *cnonce, *msg1, *serverSignature;
-public:
-				TScramAuth(ThreadData*);
-	virtual ~TScramAuth();
+	char *bindFlag, *cnonce = 0, *msg1 = 0, *serverSignature = 0;
+	MBinBuffer bindData;
+	const EVP_MD *hashMethod;
 
-	virtual	char* getInitialRequest();
-	virtual	char* getChallenge(const char *challenge);
-	virtual bool validateLogin(const char *challenge);
+public:
+	TScramAuth(ThreadData *pInfo, const char *pszMech, const EVP_MD *pMethod, int priority);
+	~TScramAuth();
+
+	char* getInitialRequest() override;
+	char* getChallenge(const char *challenge) override;
+	bool  validateLogin(const char *challenge) override;
 
 	void Hi(BYTE* res , char* passw, size_t passwLen, char* salt, size_t saltLen, int ind);
 };
@@ -102,14 +109,15 @@ class TNtlmAuth : public TJabberAuth
 {
 	typedef TJabberAuth CSuper;
 
-				HANDLE hProvider;
-				const char *szHostName;
-public:
-				TNtlmAuth(ThreadData*, const char* mechanism, const char *hostname = nullptr);
-	virtual ~TNtlmAuth();
+	HANDLE hProvider;
+	ptrA szInitRequest;
 
-	virtual	char* getInitialRequest();
-	virtual	char* getChallenge(const char *challenge);
+public:
+	TNtlmAuth(ThreadData*, const char* mechanism);
+	~TNtlmAuth();
+
+	char* getInitialRequest() override;
+	char* getChallenge(const char *challenge) override;
 
 	bool getSpn(wchar_t* szSpn, size_t dwSpnLen);
 };

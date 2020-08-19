@@ -37,7 +37,6 @@ HMODULE g_hMsftedit;
 
 static void UnloadIcons();
 
-void LoadDefaultTemplates();
 int OptInitialise(WPARAM wParam, LPARAM lParam);
 void Chat_AddIcons(HINSTANCE);
 
@@ -60,15 +59,6 @@ int SmileyAddOptionsChanged(WPARAM, LPARAM)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
-// service function - open the tray menu from the TTB button
-
-static INT_PTR Service_OpenTrayMenu(WPARAM, LPARAM lParam)
-{
-	SendMessage(PluginConfig.g_hwndHotkeyHandler, DM_TRAYICONNOTIFY, 101, lParam == 0 ? WM_LBUTTONUP : WM_RBUTTONUP);
-	return 0;
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////
 // service function finds a message session
 // wParam = contact handle for which we want the window handle
 // thanks to bio for the suggestion of this service
@@ -80,22 +70,14 @@ static INT_PTR Service_OpenTrayMenu(WPARAM, LPARAM lParam)
 // 0 if there is none (or the popup mode of the target container was configured to "hide"
 // the window..
 
-int TSAPI MessageWindowOpened(MCONTACT hContact, HWND _hwnd)
+int TSAPI MessageWindowOpened(MCONTACT hContact, CMsgDialog *pDlg)
 {
-	HWND hwnd = nullptr;
-	TContainerData *pContainer = nullptr;
-
 	if (hContact)
-		hwnd = Srmm_FindWindow(hContact);
-	else if (_hwnd)
-		hwnd = _hwnd;
-	else
+		pDlg = Srmm_FindDialog(hContact);
+	else if (!pDlg)
 		return 0;
 
-	if (!hwnd)
-		return 0;
-
-	SendMessage(hwnd, DM_QUERYCONTAINER, 0, (LPARAM)&pContainer);
+	TContainerData *pContainer = pDlg->m_pContainer;
 	if (pContainer) {
 		if (pContainer->m_flags.m_bDontReport) {
 			if (IsIconic(pContainer->m_hwnd))
@@ -109,7 +91,7 @@ int TSAPI MessageWindowOpened(MCONTACT hContact, HWND _hwnd)
 			if (pContainer->m_flags.m_bDontReportFocused)
 				return 0;
 
-			return pContainer->m_hwndActive == hwnd;
+			return pContainer->m_hwndActive == pDlg->GetHwnd();
 		}
 	}
 	return 1;
@@ -263,13 +245,18 @@ int MyAvatarChanged(WPARAM wParam, LPARAM lParam)
 
 void TSAPI CreateNewTabForContact(TContainerData *pContainer, MCONTACT hContact, bool bActivateTab, bool bPopupContainer, bool bWantPopup, MEVENT hdbEvent, bool bIsUnicode, const char *pszInitialText)
 {
+	if (hContact == 0) {
+		_DebugPopup(hContact, L"Warning: trying to create a window for empty contact");
+		return;
+	}
+
 	if (Srmm_FindWindow(hContact) != nullptr) {
 		_DebugPopup(hContact, L"Warning: trying to create duplicate window");
 		return ;
 	}
 
 	// if we have a max # of tabs/container set and want to open something in the default container...
-	if (hContact != 0 && M.GetByte("limittabs", 0) && !wcsncmp(pContainer->m_wszName, L"default", 6))
+	if (M.GetByte("limittabs", 0) && !wcsncmp(pContainer->m_wszName, L"default", 6))
 		if ((pContainer = FindMatchingContainer(L"default")) == nullptr)
 			if ((pContainer = CreateContainer(L"default", CNT_CREATEFLAG_CLONED, hContact)) == nullptr)
 				return;
@@ -492,7 +479,6 @@ static TIconDesc _deficons[] =
 	{ "tabSRMM_Leftarrow", LPGEN("Left Arrow"), &PluginConfig.g_buttonBarIcons[ICON_DEFAULT_LEFT], -IDI_LEFTARROW, 1 },
 	{ "tabSRMM_Rightarrow", LPGEN("Right Arrow"), &PluginConfig.g_buttonBarIcons[ICON_DEFAULT_RIGHT], -IDI_RIGHTARROW, 1 },
 	{ "tabSRMM_Pulluparrow", LPGEN("Up Arrow"), &PluginConfig.g_buttonBarIcons[ICON_DEFAULT_UP], -IDI_PULLUPARROW, 1 },
-	{ "tabSRMM_sb_slist", LPGEN("Session List"), &PluginConfig.g_sideBarIcons[0], -IDI_SESSIONLIST, 1 },
 };
 
 static TIconDesc _trayIcon[] =
@@ -561,7 +547,7 @@ static int TSAPI SetupIconLibConfig()
 	sid.iDefaultIndex = -IDI_CLOCK;
 	g_plugin.addIcon(&sid);
 
-	wcsncpy(szFilename, L"plugins\\tabsrmm.dll", MAX_PATH);
+	wcsncpy_s(szFilename, L"plugins\\tabsrmm.dll", _TRUNCATE);
 
 	sid.pszName = "tabSRMM_overlay_disabled";
 	sid.description.a = LPGEN("Feature disabled (used as overlay)");
@@ -678,7 +664,6 @@ static void TSAPI InitAPI()
 	CreateServiceFunction("TabSRMsg/ReloadSettings", ReloadSettings);
 
 	CreateServiceFunction(MS_TABMSG_SETUSERPREFS, SetUserPrefs);
-	CreateServiceFunction(MS_TABMSG_TRAYSUPPORT, Service_OpenTrayMenu);
 	CreateServiceFunction(MS_TABMSG_SLQMGR, CSendLater::svcQMgr);
 
 	SI_InitStatusIcons();

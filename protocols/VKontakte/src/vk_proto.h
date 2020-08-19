@@ -230,6 +230,9 @@ private:
 		m_hContactHistoryMenuItems[CHMI_COUNT],
 		m_hProtoMenuItems[PMI_COUNT];
 
+
+	void InitSmileys();
+
 	//==== Menus =========================================================================
 
 	void InitMenus();
@@ -308,7 +311,6 @@ private:
 	void OnReceiveGroupInfo(NETLIBHTTPREQUEST * reply, AsyncHttpRequest * pReq);
 	void RetrieveFriends(bool bCleanNonFriendContacts = false);
 	void OnReceiveFriends(NETLIBHTTPREQUEST*, AsyncHttpRequest*);
-	void MarkMessagesRead(const CMStringA &mids);
 	void MarkMessagesRead(const MCONTACT hContact);
 	void RetrieveMessagesByIds(const CMStringA &mids);
 	void RetrieveUnreadMessages();
@@ -359,8 +361,9 @@ private:
 	CMStringW GetVkPhotoItem(const JSONNode &jnPhoto, BBCSupport iBBC);
 	CMStringW SetBBCString(LPCWSTR wszString, BBCSupport iBBC, VKBBCType bbcType, LPCWSTR wszAddString = nullptr);
 	CMStringW& ClearFormatNick(CMStringW& wszText);
-	CMStringW GetAttachmentDescr(const JSONNode &jnAttachments, BBCSupport iBBC = bbcNo);
-	CMStringW GetFwdMessages(const JSONNode &jnMessages, const JSONNode &jnFUsers, BBCSupport iBBC = bbcNo);
+	CMStringW GetAttachmentDescr(const JSONNode &jnAttachments, BBCSupport iBBC);
+	CMStringW GetFwdMessage(const JSONNode& jnMsg, const JSONNode& jnFUsers, OBJLIST<CVkUserInfo>& vkUsers, BBCSupport iBBC);
+	CMStringW GetFwdMessages(const JSONNode &jnMessages, const JSONNode &jnFUsers, BBCSupport iBBC);
 	void SetInvisible(MCONTACT hContact);
 	CMStringW RemoveBBC(CMStringW& wszSrc);
 	void AddVkDeactivateEvent(MCONTACT hContact, CMStringW & wszType);
@@ -385,13 +388,12 @@ private:
 	void SetAvatarUrl(MCONTACT hContact, CMStringW &wszUrl);
 	void GetAvatarFileName(MCONTACT hContact, wchar_t *pwszDest, size_t cbLen);
 	void ReloadAvatarInfo(MCONTACT hContact);
-	void __cdecl SendMsgAck(void *param);
 	void __cdecl ChatContactTypingThread(void *p);
 	void StopChatContactTyping(int iChatId, LONG iUserId);
 	void OnCreateNewChat(NETLIBHTTPREQUEST*, AsyncHttpRequest*);
-	CVkChatInfo* AppendChat(int id, const JSONNode &jnNode);
+	CVkChatInfo* AppendConversationChat(int iChatId, const JSONNode& jnItem);
 	void SetChatTitle(CVkChatInfo *cc, LPCWSTR wszTopic);
-	void AppendChatMessage(int id, const JSONNode &jnMsg, const JSONNode &jnFUsers, bool bIsHistory);
+	void AppendChatConversationMessage(int id, const JSONNode& jnMsg, const JSONNode& jnFUsers, bool bIsHistory);
 	void AppendChatMessage(CVkChatInfo *cc, LONG uid, int msgTime, LPCWSTR pwszBody, bool bIsHistory, bool bIsAction = false);
 	void RetrieveChatInfo(CVkChatInfo*);
 	void OnReceiveChatInfo(NETLIBHTTPREQUEST*, AsyncHttpRequest*);

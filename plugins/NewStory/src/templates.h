@@ -9,30 +9,41 @@ enum
 
 struct TemplateVars
 {
-	bool del[256];
-	TCHAR *val[256];
+	struct {
+		wchar_t *val;
+		bool del;
+	}
+		vars[256];
+
+	__forceinline wchar_t* GetVar(uint8_t id) {
+		return vars[id].val;
+	}
+
+	__forceinline void SetVar(uint8_t id, const wchar_t *v, bool d) {
+		auto &V = vars[id];
+		if (V.val && V.del)
+			mir_free(V.val);
+		V.val = mir_wstrdup(v);
+		V.del = d;
+	}
 };
-/*
-struct VFArgs
-{
-	HANDLE hContact;
-	DBEVENTINFO *event;
-};
-*/
-typedef void(*VarFunc)(int mode, TemplateVars *vars, MCONTACT hContact, HistoryArray::ItemData *item);
+
+typedef void (*VarFunc)(int mode, TemplateVars *vars, MCONTACT hContact, ItemData *item);
 
 struct TemplateInfo
 {
-	enum { VF_COUNT = 5 };
+	enum { VF_COUNT = 6 };
 
-	char *setting;
-	TCHAR *group;
-	int  icon;
-	TCHAR *title;
-	TCHAR *defvalue;
-	TCHAR *value;
-	TCHAR *tmpValue;
+	char*    setting;
+	wchar_t* group;
+	int      iIcon;
+	wchar_t* title;
+	wchar_t* defvalue;
+	wchar_t* value;
+	wchar_t* tmpValue;
 	VarFunc vf[VF_COUNT];
+
+	HICON getIcon() const;
 };
 
 enum
@@ -40,8 +51,10 @@ enum
 	TPL_TITLE,
 
 	TPL_MESSAGE,
+	TPL_MSG_GRP,
 	TPL_FILE,
 	TPL_SIGN,
+	TPL_PRESENCE,
 	TPL_OTHER,
 
 	TPL_AUTH,
@@ -57,6 +70,7 @@ enum
 	TPL_COPY_AUTH,
 	TPL_COPY_ADDED,
 	TPL_COPY_DELETED,
+	TPL_COPY_PRESENCE,
 
 	TPL_COUNT
 };
@@ -66,7 +80,7 @@ extern TemplateInfo templates[TPL_COUNT];
 void LoadTemplates();
 void SaveTemplates();
 
-TCHAR *TplFormatString(int tpl, MCONTACT hContact, HistoryArray::ItemData *args);
-TCHAR *TplFormatStringEx(int tpl, TCHAR *sztpl, MCONTACT hContact, HistoryArray::ItemData *args);
+wchar_t* TplFormatString(int tpl, MCONTACT hContact, ItemData *args);
+wchar_t* TplFormatStringEx(int tpl, wchar_t *sztpl, MCONTACT hContact, ItemData *args);
 
 #endif // __templates_h__

@@ -27,90 +27,38 @@ LIST<CMsgDialog> g_arDialogs(10, PtrKeySortT);
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-static wchar_t* GetQuotedTextW(wchar_t *text)
+static CMStringW GetQuotedTextW(wchar_t *text)
 {
-	size_t i, j, l = mir_wstrlen(text);
-	int newLine = 1;
-	int wasCR = 0;
-	for (i = j = 0; i < l; i++) {
-		if (text[i] == '\r') {
-			wasCR = 1;
-			newLine = 1;
-			j += text[i + 1] != '\n' ? 2 : 1;
+	CMStringW res;
+	bool newLine = true;
+	bool wasCR = false;
+	for (; *text; text++) {
+		if (*text == '\r') {
+			wasCR = newLine = true;
+			res.AppendChar('\r');
+			if (text[1] != '\n')
+				res.AppendChar('\n');
 		}
-		else if (text[i] == '\n') {
-			newLine = 1;
-			j += wasCR ? 1 : 2;
-			wasCR = 0;
-		}
-		else {
-			j++;
-			if (newLine) {
-				//for (;i<l && text[i]=='>';i++) j--;
-				j += 2;
-			}
-			newLine = 0;
-			wasCR = 0;
-		}
-	}
-	j += 3;
-
-	wchar_t *out = (wchar_t*)mir_alloc(sizeof(wchar_t)* j);
-	newLine = 1;
-	wasCR = 0;
-	for (i = j = 0; i < l; i++) {
-		if (text[i] == '\r') {
-			wasCR = 1;
-			newLine = 1;
-			out[j++] = '\r';
-			if (text[i + 1] != '\n')
-				out[j++] = '\n';
-		}
-		else if (text[i] == '\n') {
-			newLine = 1;
+		else if (*text == '\n') {
+			newLine = true;
 			if (!wasCR)
-				out[j++] = '\r';
+				res.AppendChar('\r');
 
-			out[j++] = '\n';
-			wasCR = 0;
+			res.AppendChar('\n');
+			wasCR = false;
 		}
 		else {
 			if (newLine) {
-				out[j++] = '>';
-				out[j++] = ' ';
-				//for (;i<l && text[i]=='>';i++) j--;
+				res.AppendChar('>');
+				res.AppendChar(' ');
 			}
-			newLine = 0;
-			wasCR = 0;
-			out[j++] = text[i];
+			wasCR = newLine = false;
+			res.AppendChar(*text);
 		}
 	}
-	out[j++] = '\r';
-	out[j++] = '\n';
-	out[j++] = '\0';
-	return out;
-}
-
-static void AddToFileList(wchar_t ***pppFiles, int *totalCount, const wchar_t* szFilename)
-{
-	*pppFiles = (wchar_t**)mir_realloc(*pppFiles, (++*totalCount + 1)*sizeof(wchar_t*));
-	(*pppFiles)[*totalCount] = nullptr;
-	(*pppFiles)[*totalCount - 1] = mir_wstrdup(szFilename);
-
-	if (GetFileAttributes(szFilename) & FILE_ATTRIBUTE_DIRECTORY) {
-		WIN32_FIND_DATA fd;
-		wchar_t szPath[MAX_PATH];
-		mir_snwprintf(szPath, L"%s\\*", szFilename);
-		HANDLE hFind = FindFirstFile(szPath, &fd);
-		if (hFind != INVALID_HANDLE_VALUE) {
-			do {
-				if (!mir_wstrcmp(fd.cFileName, L".") || !mir_wstrcmp(fd.cFileName, L"..")) continue;
-				mir_snwprintf(szPath, L"%s\\%s", szFilename, fd.cFileName);
-				AddToFileList(pppFiles, totalCount, szPath);
-			} while (FindNextFile(hFind, &fd));
-			FindClose(hFind);
-		}
-	}
+	res.AppendChar('\r');
+	res.AppendChar('\n');
+	return res;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -273,7 +221,6 @@ bool CMsgDialog::OnInitDialog()
 
 	SendMessage(m_hwnd, DM_CHANGEICONS, 0, 0);
 
-	m_message.SetReadOnly(false);
 	m_message.SendMsg(EM_SETLANGOPTIONS, 0, (LPARAM)m_message.SendMsg(EM_GETLANGOPTIONS, 0, 0) & ~IMF_AUTOKEYBOARD);
 	m_message.SendMsg(EM_SETEVENTMASK, 0, ENM_MOUSEEVENTS | ENM_KEYEVENTS | ENM_CHANGE | ENM_REQUESTRESIZE);
 	if (m_hContact && m_szProto) {
@@ -282,8 +229,6 @@ bool CMsgDialog::OnInitDialog()
 			m_message.SendMsg(EM_EXLIMITTEXT, 0, nMax);
 	}
 
-	// get around a lame bug in the Windows template resource code where richedits are limited to 0x7FFF
-	::DragAcceptFiles(m_message.GetHwnd(), TRUE);
 	CreateInfobar();
 	
 	if (isChat()) {
@@ -517,16 +462,15 @@ void CMsgDialog::onClick_Ok(CCtrlButton *pButton)
 void CMsgDialog::onClick_UserMenu(CCtrlButton *pButton)
 {
 	if (GetKeyState(VK_SHIFT) & 0x8000) { // copy user name
-		char buf[128];
-		GetContactUniqueId(buf, sizeof(buf));
-		if (!OpenClipboard(m_hwnd) || !mir_strlen(buf))
+		ptrW id(Contact_GetInfo(CNF_UNIQUEID, m_hContact, m_szProto));
+		if (!OpenClipboard(m_hwnd) || !mir_wstrlen(id))
 			return;
 
 		EmptyClipboard();
-		HGLOBAL hData = GlobalAlloc(GMEM_MOVEABLE, mir_strlen(buf) + 1);
-		mir_strcpy((LPSTR)GlobalLock(hData), buf);
+		HGLOBAL hData = GlobalAlloc(GMEM_MOVEABLE, 2*mir_wstrlen(id) + 1);
+		mir_wstrcpy((LPWSTR)GlobalLock(hData), id);
 		GlobalUnlock(hData);
-		SetClipboardData(CF_TEXT, hData);
+		SetClipboardData(CF_UNICODETEXT, hData);
 		CloseClipboard();
 	}
 	else {
@@ -549,9 +493,8 @@ void CMsgDialog::onClick_Quote(CCtrlButton*)
 
 	wchar_t *buffer = m_pLog->GetSelection();
 	if (buffer != nullptr) {
-		wchar_t *quotedBuffer = GetQuotedTextW(buffer);
-		m_message.SendMsg(EM_SETTEXTEX, (WPARAM)&st, (LPARAM)quotedBuffer);
-		mir_free(quotedBuffer);
+		CMStringW quotedBuffer(GetQuotedTextW(buffer));
+		m_message.SendMsg(EM_SETTEXTEX, (WPARAM)&st, (LPARAM)quotedBuffer.c_str());
 		mir_free(buffer);
 	}
 	else {
@@ -564,9 +507,8 @@ void CMsgDialog::onClick_Quote(CCtrlButton*)
 		if (DbEventIsMessageOrCustom(&dbei)) {
 			buffer = DbEvent_GetTextW(&dbei, CP_ACP);
 			if (buffer != nullptr) {
-				wchar_t *quotedBuffer = GetQuotedTextW(buffer);
-				m_message.SendMsg(EM_SETTEXTEX, (WPARAM)&st, (LPARAM)quotedBuffer);
-				mir_free(quotedBuffer);
+				CMStringW quotedBuffer(GetQuotedTextW(buffer));
+				m_message.SendMsg(EM_SETTEXTEX, (WPARAM)&st, (LPARAM)quotedBuffer.c_str());
 				mir_free(buffer);
 			}
 		}
@@ -957,11 +899,6 @@ LRESULT CMsgDialog::WndProc_Message(UINT msg, WPARAM wParam, LPARAM lParam)
 		break;
 
 	case WM_MOUSEWHEEL:
-		if ((GetWindowLongPtr(m_message.GetHwnd(), GWL_STYLE) & WS_VSCROLL) == 0)
-			SendMessage(m_pLog->GetHwnd(), WM_MOUSEWHEEL, wParam, lParam);
-
-		__fallthrough;
-
 	case WM_LBUTTONDOWN:
 	case WM_RBUTTONDOWN:
 	case WM_MBUTTONDOWN:
@@ -983,7 +920,7 @@ LRESULT CMsgDialog::WndProc_Message(UINT msg, WPARAM wParam, LPARAM lParam)
 			if (OpenClipboard(m_message.GetHwnd())) {
 				HANDLE hDrop = GetClipboardData(CF_HDROP);
 				if (hDrop)
-					SendMessage(m_hwnd, WM_DROPFILES, (WPARAM)hDrop, 0);
+					ProcessFileDrop((HDROP)hDrop, m_hContact);
 				CloseClipboard();
 			}
 			return 0;
@@ -991,7 +928,7 @@ LRESULT CMsgDialog::WndProc_Message(UINT msg, WPARAM wParam, LPARAM lParam)
 		break;
 
 	case WM_DROPFILES:
-		SendMessage(m_hwnd, WM_DROPFILES, wParam, lParam);
+		ProcessFileDrop((HDROP)wParam, m_hContact);
 		return 0;
 
 	case WM_CONTEXTMENU:
@@ -1119,22 +1056,7 @@ INT_PTR CMsgDialog::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
 		break;
 
 	case WM_DROPFILES:
-		if (m_szProto == nullptr) break;
-		if (!(CallProtoService(m_szProto, PS_GETCAPS, PFLAGNUM_1, 0)&PF1_FILESEND)) break;
-		if (m_wStatus == ID_STATUS_OFFLINE) break;
-		if (m_hContact != 0) {
-			wchar_t szFilename[MAX_PATH];
-			HDROP hDrop = (HDROP)wParam;
-			int fileCount = DragQueryFile(hDrop, -1, nullptr, 0), totalCount = 0, i;
-			wchar_t** ppFiles = nullptr;
-			for (i = 0; i < fileCount; i++) {
-				DragQueryFile(hDrop, i, szFilename, _countof(szFilename));
-				AddToFileList(&ppFiles, &totalCount, szFilename);
-			}
-			CallServiceSync(MS_FILE_SENDSPECIFICFILEST, m_hContact, (LPARAM)ppFiles);
-			for (i = 0; ppFiles[i]; i++) mir_free(ppFiles[i]);
-			mir_free(ppFiles);
-		}
+		ProcessFileDrop((HDROP)wParam, m_hContact);
 		break;
 
 	case DM_AVATARCHANGED:
@@ -1149,10 +1071,9 @@ INT_PTR CMsgDialog::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
 	case DM_CLISTSETTINGSCHANGED:
 		if (wParam == m_hContact && m_hContact && m_szProto) {
 			DBCONTACTWRITESETTING *cws = (DBCONTACTWRITESETTING *)lParam;
-			char idbuf[128], buf[128];
-			GetContactUniqueId(idbuf, sizeof(idbuf));
-			mir_snprintf(buf, Translate("User menu - %s"), idbuf);
-			SendDlgItemMessage(m_hwnd, IDC_USERMENU, BUTTONADDTOOLTIP, (WPARAM)buf, 0);
+			wchar_t buf[128];
+			mir_snwprintf(buf, TranslateT("User menu - %s"), ptrW(Contact_GetInfo(CNF_UNIQUEID, m_hContact, m_szProto)).get());
+			SendDlgItemMessage(m_hwnd, IDC_USERMENU, BUTTONADDTOOLTIP, (WPARAM)buf, BATF_UNICODE);
 
 			if (cws && !mir_strcmp(cws->szModule, m_szProto) && !mir_strcmp(cws->szSetting, "Status"))
 				m_wStatus = cws->value.wVal;
@@ -1166,9 +1087,10 @@ INT_PTR CMsgDialog::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
 		break;
 
 	case DM_OPTIONSAPPLIED:
-		GetAvatar();
-		SetDialogToType();
-		{
+		if (!isChat()) {
+			GetAvatar();
+			SetDialogToType();
+
 			m_pLog->UpdateOptions();
 
 			COLORREF colour = g_plugin.getDword(SRMSGSET_INPUTBKGCOLOUR, SRMSGDEFSET_INPUTBKGCOLOUR);
@@ -1191,14 +1113,14 @@ INT_PTR CMsgDialog::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
 			cf2.yHeight = abs(lf.lfHeight) * 1440 / g_dat.logPixelSY;
 			m_message.SendMsg(EM_SETCHARFORMAT, SCF_ALL, (LPARAM)&cf2);
 			m_message.SendMsg(EM_SETLANGOPTIONS, 0, (LPARAM)m_message.SendMsg(EM_GETLANGOPTIONS, 0, 0) & ~IMF_AUTOKEYBOARD);
-		}
 
-		SendMessage(m_hwnd, DM_REMAKELOG, 0, 0);
-		UpdateTitle();
-		UpdateTabControl();
-		UpdateStatusBar();
-		m_message.SendMsg(EM_REQUESTRESIZE, 0, 0);
-		SetupInfobar();
+			SendMessage(m_hwnd, DM_REMAKELOG, 0, 0);
+			UpdateTitle();
+			UpdateTabControl();
+			UpdateStatusBar();
+			m_message.SendMsg(EM_REQUESTRESIZE, 0, 0);
+			SetupInfobar();
+		}
 		break;
 
 	case DM_ACTIVATE:
@@ -1390,23 +1312,6 @@ INT_PTR CMsgDialog::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
 				m_iShowUnread++;
 				tcd.hIcon = (m_iShowUnread & 1) ? m_hStatusIconOverlay : m_hStatusIcon;
 				m_pParent->UpdateTabControl(tcd, m_hwnd);
-			}
-		}
-		break;
-
-	case DM_ERRORDECIDED:
-		{
-			MessageSendQueueItem *item = (MessageSendQueueItem *)lParam;
-			item->hwndErrorDlg = nullptr;
-			switch (wParam) {
-			case MSGERROR_CANCEL:
-				RemoveSendQueueItem(item);
-				SetFocus(m_message.GetHwnd());
-				break;
-			case MSGERROR_RETRY:
-				StartMessageSending();
-				SendSendQueueItem(item);
-				break;
 			}
 		}
 		break;

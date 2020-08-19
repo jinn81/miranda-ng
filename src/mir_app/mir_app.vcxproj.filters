@@ -2,17 +2,726 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(ProjectDir)..\..\build\vc.common\common.filters" />
   <ItemGroup>
-    <ClInclude Include="src\*.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClCompile Include="src\*.cpp;src\*.cxx">
+    <ClCompile Include="src\addcontact.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ResourceCompile Include="res\*.rc">
+    <ClCompile Include="src\auth.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\button.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\chat_clist.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\chat_log.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\chat_manager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\chat_opts.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\chat_rtf.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\chat_svc.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\chat_tools.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\clc.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\clcfiledrop.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\clcidents.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\clcitems.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\clcmsgs.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\clcutils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\clistcore.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\clistevents.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\clistgroups.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\clistmod.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\clistopts.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\clistsettings.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\clisttray.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\clui.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cluiservices.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\CMPluginBase.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\colorchooser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\contact.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\contacts.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\database.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\db_events.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\db_ini.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\db_intf.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\db_util.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\descbutton.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\dll_sniffer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Docking.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ei_baseIcon.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ei_callbackIcon.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ei_defaulticons.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ei_extraIcon.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ei_groupIcon.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ei_icolibIcon.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ei_options.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ei_services.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\encrypt.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\enterstring.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\extracticon.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\filter.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\findadd.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\FontOptions.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\FontService.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\headerbar.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\help.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\hotkeys.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\hotkey_opts.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\icolib.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\idle.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ignore.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\image_utils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\imgconv.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\keyboard.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\lpopts.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\mdatabasecache.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\MDatabaseCommon.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\MDatabaseReadonly.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\menu_clist.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\menu_frames.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\menu_groups.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\menu_options.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\menu_tray.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\menu_utils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\meta_addto.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\meta_api.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\meta_edit.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\meta_main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\meta_menu.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\meta_options.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\meta_services.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\meta_utils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\MHttpRequest.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\miranda.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\modules.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\movetogroup.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\netlib.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\netlib_autoproxy.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\netlib_bind.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\netlib_http.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\netlib_httpproxy.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\netlib_log.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\netlib_openconn.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\netlib_opts.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\netlib_pktrecver.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\netlib_security.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\netlib_sock.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\netlib_upnp.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\netlib_websocket.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\newplugins.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\openssl.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\options.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\path.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\pluginopts.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\popups.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\profilemanager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\protocols.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\proto_accs.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\proto_chains.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\proto_internal.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\proto_opts.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\proto_order.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\proto_ui.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\proto_utils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\searchresults.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\skin2opts.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\skinicons.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\sounds.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\srmm_base.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\srmm_log.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\srmm_log_hpp.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\srmm_log_rtf.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\srmm_statusicon.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\srmm_toolbar.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\srmm_util.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\stdafx.cxx">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\usedIcons.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\utils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\visibility.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\proto_interface.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\chat_ui.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\chat.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\clc.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\database.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\extraicons.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\filter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\findadd.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\FontService.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\genmenu.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\IcoLib.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\langpack.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\metacontacts.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\miranda.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\netlib.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\openssl.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\plugins.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\profilemanager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\skin.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\stdafx.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\usedIcons.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="res\resource.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
-    <None Include="res\*.ico;res\*.bmp;res\*.cur">
+    <ResourceCompile Include="res\version.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="src\mir_app.def" />
+    <None Include="src\mir_app64.def" />
+    <None Include="res\cursor_hyperlink.cur">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="res\cursor_drag_copy.cur">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="res\cursor_drop_user.cur">
+      <Filter>Resource Files</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="..\docs\contributors.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="res\miranda_logo.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\miranda_home.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\miranda_manager.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\contact_view_details.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\contact_add.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\contact_rename.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\contact_delete.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\group_closed.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\group_opened.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\status_user_online.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\status_online.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\status_away.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\status_NA.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\status_occupied.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\status_DND.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\status_free4chat.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\status_invisible.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\status_on_the_phone.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\status_out2lunch.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\status_offline.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_connecting.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_typing.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_find_user.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_search_all.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_options.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_accmgr.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_mainmenu.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_help.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_message.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_file.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_history.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_url.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_sms.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_mail.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_small_dot.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_auth_request.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_all.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_down_arrow.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\check_off.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\check_on.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_unicode.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_ansi.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_loaded_gray.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_notloaded.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_notloaded_gray.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_frame.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_fatal.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_error.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_warning.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_notify.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\_blank.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_undo.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_window.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_windows.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\chat_join.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\chat_leave.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\status_locked.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\Icon_show_hide.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\Icon_exit.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\contact_groups.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\On.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\Off.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\always_visible.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\never_visible.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\chat_channel.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\male.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\female.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\auth_add.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\auth_grant.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\auth_request.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\auth_revoke.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\meta_menu.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\meta_menuof.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\meta_edit.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\meta_remove2.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\meta_convert.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\meta_add.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\meta_set_as_default.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\addgroup.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_popup.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_popup_no.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\icon_password.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>

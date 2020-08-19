@@ -2,7 +2,7 @@
 ;============================================================
 ;  File: TabSRMM.dll
 ;  Plugin: TabSRMM
-;  Version: 3.6.0.4
+;  Version: 3.6.1.3
 ;  Authors: The Miranda developers team and contributors
 ;============================================================
 [IM and group chat module for Miranda NG.]
@@ -64,20 +64,6 @@
 Высота пунктов списка пользователей (пикселей)
 [Open log file base folder]
 Открыть папку с журналами чатов
-[Default settings for known event types]
-Настройки для известных типов событий
-[Show when filter is active]
-Показывать при вкл. фильтре
-[Log to file]
-Запись в файл
-[Show popup]
-Вспл. окно
-[Notify in tray]
-В трее
-[Suppress tray notifications for focused channel windows]
-Выключить уведомления в трее при активном окне чата
-[Highlight event]
-Подсветка
 [Line markers in the message log]
 Маркеры строк в чате:
 [Highlight user names]
@@ -142,8 +128,6 @@
 Размер истории ввода
 [entries]
 записей
-[Options marked with an asterisk (*) will only take effect after Miranda has been restarted.]
-Настройки, отмеченные (*), вступят в силу только после перезапуска Miranda NG.
 [More about advanced tweaks]
 Подробнее о дополнительных настройках
 [Revert to (safe) defaults]
@@ -200,8 +184,6 @@
 Только актуальная история
 [Use private splitter position]
 Собственный разделитель
-[Contact is a favorite contact]
-Контакт находится в избранном
 [Always trim message log to]
 Всегда ограничивать журнал до
 [events]
@@ -664,28 +646,6 @@ BBCode ([b][i][u])
 Глобальные настройки
 [Force off]
 Выключить
-[Recent sessions]
-Последние сессии
-[Favorites]
-Избранные
-[Show the tray icon]
-Показывать значок в трее
-[Disable all event notifications]
-Выключить все уведомления
-[Don't create windows automatically]
-Не создавать окна автоматически
-[Hide all message containers]
-Скрыть все контейнеры
-[Restore all message containers]
-Восстановить все контейнеры
-[Don't play sounds]
-Выключить звуки
-[Be "super quiet"]
-Быть "очень тихим"
-[Add contact to favorites]
-Добавить контакт к избранным
-[Remove contact from favorites]
-Удалить контакт из избранных
 [Set position for this session]
 Установить положение для этой сессии
 [Set and save for all sessions]
@@ -793,33 +753,6 @@ BBCode ([b][i][u])
 Фильтр событий - щелчок правой кнопкой для настройки, левой - вкл/выкл
 [Channel manager]
 Управление каналом
-;file \plugins\TabSRMM\src\chat_log.cpp
-[%s has joined]
-%s вошёл
-[You have joined %s]
-Вы пришли на '%s'
-[%s has left]
-%s вышел
-[%s has disconnected]
-%s отключился
-[%s is now known as %s]
-%s сменил имя на %s
-[You are now known as %s]
-Вы сменили имя на %s
-[%s kicked %s]
-%s выкинул %s
-[Notice from %s: ]
-Уведомление от %s:\s
-[The topic is '%s%s']
-Тема '%s%s'
-[ (set by %s on %s)]
- (установлено %s %s)
-[ (set by %s)]
- (установлена %s)
-[%s enables '%s' status for %s]
-%s включает статус '%s' для %s
-[%s disables '%s' status for %s]
-%s выключает статус '%s' для %s
 ;file \plugins\TabSRMM\src\chat_main.cpp
 [Message sessions]
 Беседы
@@ -1072,6 +1005,12 @@ IRC-стиль (текстовый) индикаторов ролей в жур�
 Цветные ники в чате
 [Scale down icons to 10x10 pixels in the chat log]
 Менять разрешение значков на 10х10 в окне чата
+[No markers]
+Без маркеров
+[Show as icons]
+Значки
+[Show as text symbols]
+Текстовые символы
 [nick of current contact (if defined)]
 ник текущего контакта (если определён)
 [protocol name of current contact (if defined). Account name is used when protocol supports multiple accounts]
@@ -1126,18 +1065,10 @@ ID текущего контакта (если определён). Наприм
 Все файлы
 [Select folder]
 Выбрать папку
-[No markers]
-Без маркеров
-[Show as icons]
-Значки
-[Show as text symbols]
-Текстовые символы
 [Settings]
 Настройки
 [Log formatting]
 Формат журнала
-[Events and filters]
-События и фильтры
 [Highlighting]
 Подсветка
 ;file \plugins\TabSRMM\src\chat_tools.cpp
@@ -1146,6 +1077,8 @@ ID текущего контакта (если определён). Наприм
 ;file \plugins\TabSRMM\src\container.cpp
 [Message session...]
 Беседа...
+[Message from %s]
+Сообщение от %s
 [Default container]
 Контейнер по умолчанию
 [Attach to]
@@ -1233,8 +1166,6 @@ ID текущего контакта (если определён). Наприм
 Не уведомлять, если открыто окно сообщений
 [Don't announce events from RSS protocols]
 Не уведомлять о событиях в протоколе RSS
-[Enable the system tray icon]
-Включить значок в трее
 [Merge new events for the same contact into existing popup]
 Добавлять новые события в уже существующее всплывающее окно
 [Show headers]
@@ -1288,8 +1219,6 @@ ID текущего контакта (если определён). Наприм
 %s ввел(а) текст.
 [%s is typing a message]
 %s набирает текст
-[Auto scrolling is disabled, %d message(s) queued (press F12 to enable it)]
-Автопрокрутка отключена, %d сообщений в очереди (нажмите F12 для включения)
 ;file \plugins\TabSRMM\src\globals.cpp
 [Instant messages]
 Сообщения IM
@@ -1309,16 +1238,10 @@ ID текущего контакта (если определён). Наприм
 Другое
 [TabSRMM: typing]
 TabSRMM: набор текста
-[TabSRMM session list]
-Список сессий TabSRMM
-[TabSRMM menu]
-Меню TabSRMM
 [&Messaging settings...]
 Настройки &бесед...
 [&Send later job list...]
 Задачи для &отправки с задержкой...
-[Message from %s]
-Сообщение от %s
 [signed off.]
 отключён(а).
 [signed on and is now %s.]
@@ -1641,6 +1564,14 @@ UID: %s (Shift+клик -> копировать в буфер)\nКлик - ин�
 Использовать одно и то же положение разделителя для всех сессий
 [Automatically copy selected text]
 Автоматически копировать выделенный текст
+[Test contact]
+Тестовый контакт
+[Template set editor]
+Редактор шаблонов
+[This will reset the template set to the default built-in templates. Are you sure you want to do this?]
+Удаление всех шаблонов и сброс на шаблоны по умолчанию. Вы уверены, что хотите этого?
+[Template set was successfully reset, please close and reopen all message windows. This template editor window will now close.]
+Шаблоны сброшены. Пожалуйста, закройте и откройте снова все окна сообщений. Это окно сейчас будет закрыто.
 [Message log appearance]
 Внешний вид журнала
 [Support for external plugins]
@@ -1727,8 +1658,8 @@ UID: %s (Shift+клик -> копировать в буфер)\nКлик - ин�
 Ошибки доставки сообщений
 [Close current tab on send]
 Закрывать вкладку при отправке
-[Enable unattended send (experimental feature, required for multisend and send later) (*)]
-Включить автоотправку (нужно для мультиотправки и отправки с задержкой) (*)
+[Enable unattended send (experimental feature, required for multisend and send later)]
+Включить автоотправку (нужно для мультиотправки и отправки с задержкой)
 [Show client description in info panel]
 Показать описание клиента в инфо-панели
 [On tab control]
@@ -1806,8 +1737,6 @@ UID: %s (Shift+клик -> копировать в буфер)\nКлик - ин�
 Стрелка вправо
 [Up Arrow]
 Стрелка вверх
-[Session List]
-Список сессий
 [Frame 1]
 Кадр 1
 [Frame 2]
@@ -1926,12 +1855,6 @@ UID: %s (Shift+клик -> копировать в буфер)\nКлик - ин�
 Отправленное сгруппированное (середина)
 [Error message]
 Сообщение об ошибке
-[Template set editor]
-Редактор шаблонов
-[This will reset the template set to the default built-in templates. Are you sure you want to do this?]
-Удаление всех шаблонов и сброс на шаблоны по умолчанию. Вы уверены, что хотите этого?
-[Template set was successfully reset, please close and reopen all message windows. This template editor window will now close.]
-Шаблоны сброшены. Пожалуйста, закройте и откройте снова все окна сообщений. Это окно сейчас будет закрыто.
 ;file \plugins\TabSRMM\src\themeio.cpp
 [TabSRMM themes]
 Темы TabSRMM
@@ -1952,7 +1875,6 @@ UID: %s (Shift+клик -> копировать в буфер)\nКлик - ин�
 Перед сменой скина нужно закрыть все контейнеры\nПродолжить?
 [Change skin]
 Изменение скина
-;file \plugins\TabSRMM\src\trayicon.cpp
 ;file \plugins\TabSRMM\src\typingnotify.cpp
 [Disable &typing notification]
 Выключить уведомления о &наборе текста
@@ -1972,6 +1894,8 @@ UID: %s (Shift+клик -> копировать в буфер)\nКлик - ин�
 ;file \plugins\TabSRMM\src\utils.cpp
 [TabSRMM message (%s)]
 TabSRMM: %s
+[Save file|Unable to save temporary file]
+Сохранение файла|Не удалось сохранить временный файл
 [Edit user notes|You are editing the user notes. Click the button again or use the hotkey (default: Alt+N) to save the notes and return to normal messaging mode]
 Редактирование заметок о пользователе|Вы редактируете заметки о пользователе. Нажмите на кнопку ещё раз или используйте горячую клавишу (по умолчанию: Alt+N), чтобы сохранить заметки и вернуться в нормальный режим набора ообщений
 [Missing component|The icon pack is missing. Please install it to the default icons folder.\n\nNo icons will be available]

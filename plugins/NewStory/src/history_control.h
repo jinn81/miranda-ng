@@ -3,6 +3,13 @@
 
 #define NEWSTORYLIST_CLASS "NewstoryList"
 
+struct ADDEVENTS
+{
+	MCONTACT hContact;
+	MEVENT hFirstEVent;
+	int eventCount;
+};
+
 enum
 {
 	NSM_FIRST = WM_USER + 100,
@@ -36,6 +43,13 @@ enum
 	// result = id
 	NSM_GETITEMFROMPIXEL,
 
+	// add one or more events
+	NSM_ADDEVENTS,
+	NSM_ADDCHATEVENT,
+
+	// clear log
+	NSM_CLEAR,
+
 	// wParam = id
 	NSM_SETCARET,
 
@@ -52,10 +66,19 @@ enum
 
 	//
 	NSM_COPY,
+	NSM_DELETE,
 	NSM_EXPORT,
 
 	//
 	NSM_GETCOUNT,
+	NSM_GETARRAY,
+
+	//
+	NSM_SEEKEND,
+	NSM_SEEKTIME,
+
+	// 
+	NSM_SET_SRMM, // act inside SRMM dialog
 
 	NSM_LAST
 };

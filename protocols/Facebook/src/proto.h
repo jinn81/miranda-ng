@@ -77,7 +77,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  * server started checking this.
  */
 
-#define FB_ORCA_AGENT "[FBAN/Orca-Android;FBAV/192.0.0.31.101;FBPN/com.facebook.orca;FBLC/en_US;FBBV/52182662]"
+#define FB_ORCA_AGENT "[FBAN/Orca-Android;FBAV/248.0.0.7.127;FBPN/com.facebook.orca;FBLC/en_US;FBBV/194293860]"
 
 /**
  * FB_API_AGENT:
@@ -249,8 +249,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  * The query hash for the `ThreadListQuery`.
  *
  * Key mapping:
- *   0: folder_tag
- *   1: thread_count
+ *   0: folder_tag (INBOX, PENDING, ARCHIVED, OTHER, UNREAD)
+ *   1: thread_count (result is sorted from newest to oldest when parameter is sent)
  *   2: include_thread_info
  *   3: verification_type
  *   4: hash_key
@@ -343,15 +343,17 @@ public:
 
 struct FacebookUser
 {
-   FacebookUser(__int64 _p1, MCONTACT _p2, bool _p3 = false) :
+   FacebookUser(__int64 _p1, MCONTACT _p2, bool _p3 = false, bool _p4 = false) :
       id(_p1),
       hContact(_p2),
-      bIsChat(_p3)
+      bIsChat(_p3),
+      bIsChatInitialized(_p4)
    {}
 
    __int64  id;
    MCONTACT hContact;
    bool bIsChat;
+   bool bIsChatInitialized;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -360,11 +362,13 @@ struct COwnMessage
 {
    __int64 msgId;
    int reqId;
+   MCONTACT hContact;
    CMStringW wszText;
 
-   COwnMessage(__int64 _id, int _reqId) :
+   COwnMessage(__int64 _id, int _reqId, MCONTACT _hContact) :
       msgId(_id),
-      reqId(_reqId)
+      reqId(_reqId),
+      hContact(_hContact)
    {
    }
 };
@@ -429,6 +433,7 @@ class FacebookProto : public PROTO<FacebookProto>
    void MqttQueueConnect();
 
    void OnPublish(const char *str, const uint8_t *payLoad, size_t cbLen);
+   void OnPublishDelivery(FbThriftReader &rdr);
    void OnPublishMessage(FbThriftReader &rdr);
    void OnPublishPresence(FbThriftReader &rdr);
    void OnPublishUtn(FbThriftReader &rdr);
@@ -446,7 +451,6 @@ class FacebookProto : public PROTO<FacebookProto>
    __int64   m_sid;          // stored, Facebook sequence id
 
    int       m_iUnread;
-	bool      m_invisible;
 	bool      m_bOnline;
    bool      m_QueueCreated;
 
@@ -460,20 +464,23 @@ class FacebookProto : public PROTO<FacebookProto>
       return m_users.find((FacebookUser *)&id);
    }
 
-   FacebookUser* UserFromJson(const JSONNode &root, CMStringW &wszId);
+   FacebookUser* UserFromJson(const JSONNode &root, CMStringW &wszId, bool &bIsChat);
 
    void FetchAttach(const CMStringA &mid, __int64 fbid, CMStringA &szBody);
+   void NotifyDelivery(const CMStringA &msgid);
 
    void OnLoggedIn();
    void OnLoggedOut();
 
+   bool RefreshSid();
    bool RefreshToken();
+   FacebookUser* RefreshThread(JSONNode& n);
+   FacebookUser* RefreshThread(CMStringW& wszId);
    void RefreshThreads();
    int  RefreshContacts();
 
    FacebookUser* AddContact(const CMStringW &wszId, bool bTemp = true);
 
-   void __cdecl SendMessageAckThread(void *);
    void __cdecl ServerThread(void *);
 
 public:
@@ -491,11 +498,13 @@ public:
     //////////////////////////////////////////////////////////////////////////////////////
     // options
 
-    CMOption<wchar_t *> m_wszDefaultGroup; // clist group to store contacts
-    CMOption<BYTE>      m_bUseBigAvatars;  // use big or small avatars by default
-    CMOption<BYTE>      m_bUseGroupchats;  // do we need group chats at all?
-    CMOption<BYTE>      m_bHideGroupchats; // do not open chat windows on creation
-    CMOption<bool>      m_bKeepUnread;     // do not mark incoming messages as read
+    CMOption<wchar_t *> m_wszDefaultGroup;  // clist group to store contacts
+    CMOption<bool>      m_bUseBigAvatars;   // use big or small avatars by default
+    CMOption<bool>      m_bUseGroupchats;   // do we need group chats at all?
+    CMOption<bool>      m_bHideGroupchats;  // do not open chat windows on creation
+    CMOption<bool>      m_bLoginInvisible;  // login in the invisible mode
+    CMOption<bool>      m_bKeepUnread;      // do not mark incoming messages as read
+    CMOption<bool>      m_bLoadAll;         // load all contacts, not only those who have ARE_FRIENDS status
 
 	////////////////////////////////////////////////////////////////////////////////////////
 	// PROTO_INTERFACE

@@ -69,7 +69,7 @@ INT_PTR CToxProto::GetCaps(int type, MCONTACT)
 	case PFLAGNUM_4:
 		return PF4_SINGLEFILEONLY | PF4_SUPPORTTYPING | PF4_AVATARS | PF4_NOAUTHDENYREASON | PF4_FORCEAUTH;
 	case PFLAG_UNIQUEIDTEXT:
-		return (INT_PTR)"Tox ID";
+		return (INT_PTR)L"Tox ID";
 	case PFLAG_MAXLENOFMESSAGE:
 		return TOX_MAX_MESSAGE_LENGTH;
 	}
@@ -79,7 +79,7 @@ INT_PTR CToxProto::GetCaps(int type, MCONTACT)
 
 MCONTACT CToxProto::AddToList(int flags, PROTOSEARCHRESULT *psr)
 {
-	ptrA myAddress(getStringA(NULL, TOX_SETTINGS_ID));
+	ptrA myAddress(getStringA(TOX_SETTINGS_ID));
 	if (strnicmp(psr->id.a, myAddress, TOX_PUBLIC_KEY_SIZE) == 0) {
 		ShowNotification(TranslateT("You cannot add yourself to your contact list"), 0);
 		return NULL;
@@ -126,7 +126,7 @@ int CToxProto::FileDeny(MCONTACT hContact, HANDLE hTransfer, const wchar_t*)
 	return FileCancel(hContact, hTransfer);
 }
 
-int CToxProto::FileResume(HANDLE hTransfer, int *action, const wchar_t **szFilename)
+int CToxProto::FileResume(HANDLE hTransfer, int action, const wchar_t *szFilename)
 {
 	if (hTransfer == nullptr) // file resume canceled
 		return 1;

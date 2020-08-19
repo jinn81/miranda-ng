@@ -84,9 +84,11 @@ struct FILEURL
 
 struct FILEINFO
 {
-	wchar_t   tszOldName[MAX_PATH], tszNewName[MAX_PATH];
+	wchar_t tszOldName[MAX_PATH], tszNewName[MAX_PATH];
 	FILEURL File;
-	BOOL    bEnabled, bDeleteOnly;
+	bool    bEnabled, bDeleteOnly;
+
+	bool    IsFiltered(const CMStringW &wszFilter);
 };
 
 typedef OBJLIST<FILEINFO> FILELIST;
@@ -160,14 +162,15 @@ struct CMPlugin : public PLUGIN<CMPlugin>
 	int Load() override;
 	int Unload() override;
 
+	bool bForceRedownload = false, bSilent; // not a db options
+
 	// common options
-	bool bUpdateOnStartup, bUpdateOnPeriod, bOnlyOnceADay, bSilentMode, bBackup, bChangePlatform, bSilent, bUseHttps;
-	bool bForceRedownload = false; // not a db option
-	int  iPeriod, iPeriodMeasure;
+	CMOption<bool> bUpdateOnStartup, bUpdateOnPeriod, bOnlyOnceADay, bSilentMode, bBackup, bChangePlatform, bUseHttps, bAutoRestart;
+	CMOption<int>  iPeriod, iPeriodMeasure;
 
 	// popup options
-	BYTE PopupDefColors, PopupLeftClickAction, PopupRightClickAction;
-	int  PopupTimeout;
+	CMOption<BYTE> PopupDefColors, PopupLeftClickAction, PopupRightClickAction;
+	CMOption<DWORD> PopupTimeout;
 };
 
 void UninitCheck(void);
@@ -187,6 +190,23 @@ public:
 			::CloseHandle(m_handle);
 			m_handle = nullptr;
 		}
+	}
+};
+
+class ThreadWatch
+{
+	DWORD &pId;
+
+public:
+	ThreadWatch(DWORD &_1) :
+		pId(_1)
+	{
+		pId = ::GetCurrentThreadId();
+	}
+
+	~ThreadWatch()
+	{
+		pId = 0;
 	}
 };
 
@@ -216,7 +236,6 @@ typedef OBJLIST<ServListEntry> SERVLIST;
 ///////////////////////////////////////////////////////////////////////////////
 
 void  InitPopupList();
-void  LoadOptions();
 void  InitNetlib();
 void  InitIcoLib();
 void  InitServices();
@@ -225,9 +244,10 @@ void  InitListNew();
 void  InitCheck();
 void  CreateTimer();
 
-void  UnloadCheck();
 void  UnloadListNew();
 void  UnloadNetlib();
+
+void  CALLBACK RestartPrompt(void *);
 
 void  BackupFile(wchar_t *ptszSrcFileName, wchar_t *ptszBackFileName);
 

@@ -40,7 +40,7 @@ void AddSubcontacts(ClcData *dat, ClcContact *cont, BOOL showOfflineHereGroup)
 	cont->subcontacts = (ClcContact *)mir_calloc(sizeof(ClcContact) * subcount);
 	cont->iSubAllocated = subcount;
 	int i = 0;
-	int bHideOffline = g_plugin.getByte("HideOffline", SETTING_HIDEOFFLINE_DEFAULT);
+	int bHideOffline = Clist::HideOffline;
 	for (int j = 0; j < subcount; j++) {
 		MCONTACT hsub = db_mc_getSub(cont->hContact, j);
 		if (hsub == -1)
@@ -415,7 +415,7 @@ int CLVM_GetContactHiddenStatus(MCONTACT hContact, char *szProto, ClcData *dat)
 		searchResult = wcsstr(lowered_name, lowered_search) ? 0 : 1;
 	}
 
-	if (pdnce && g_CluiData.bFilterEffective && dat != nullptr && !dat->bForceInDialog) {
+	if (pdnce && g_CluiData.bFilterEffective && dat != nullptr) {
 		if (szProto == nullptr)
 			szProto = Proto_GetBaseAccountName(hContact);
 		// check stickies first (priority), only if we really have stickies defined (CLVM_STICKY_CONTACTS is set).

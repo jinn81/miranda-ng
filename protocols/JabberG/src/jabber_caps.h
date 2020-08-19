@@ -102,6 +102,9 @@ typedef unsigned __int64 JabberCapsBits;
 #define JABBER_FEAT_VCARD_TEMP                  "vcard-temp"
 #define JABBER_CAPS_VCARD_TEMP                  ((JabberCapsBits)1<<18)
 
+#define JABBER_FEAT_MAM                         "urn:xmpp:mam:2"
+#define JABBER_CAPS_MAM                         ((JabberCapsBits)1<<19)
+
 #define JABBER_FEAT_XHTML                       "http://jabber.org/protocol/xhtml-im"
 #define JABBER_CAPS_XHTML                       ((JabberCapsBits)1<<20)
 
@@ -189,12 +192,17 @@ typedef unsigned __int64 JabberCapsBits;
 #define JABBER_FEAT_CARBONS                     "urn:xmpp:carbons:2"
 #define JABBER_CAPS_CARBONS                     ((JabberCapsBits)1<<49)
 
+#define JABBER_FEAT_BITS                        "urn:xmpp:bob"
+#define JABBER_CAPS_BITS                        ((JabberCapsBits)1<<50)
+
 #define JABBER_FEAT_ARCHIVE                     "urn:xmpp:archive"
 #define JABBER_FEAT_BIND                        "urn:ietf:params:xml:ns:xmpp-bind"
 #define JABBER_FEAT_CAPTCHA                     "urn:xmpp:captcha"
 #define JABBER_FEAT_CSI                         "urn:xmpp:csi:0"
-#define JABBER_FEAT_JUD									"jabber:iq:search"
+#define JABBER_FEAT_JUD                         "jabber:iq:search"
+#define JABBER_FEAT_IDLE                        "urn:xmpp:idle:1"
 #define JABBER_FEAT_SERVER_AVATAR               "storage:client:avatar"
+#define JABBER_FEAT_SID                         "urn:xmpp:sid:0"
 #define JABBER_FEAT_UPLOAD                      "urn:xmpp:http:upload"
 #define JABBER_FEAT_UPLOAD0                     "urn:xmpp:http:upload:0"
 
@@ -209,11 +217,11 @@ typedef unsigned __int64 JabberCapsBits;
                                      JABBER_CAPS_BYTESTREAMS | JABBER_CAPS_IBB | JABBER_CAPS_OOB | JABBER_CAPS_CHATSTATES | JABBER_CAPS_AGENTS | JABBER_CAPS_BROWSE | \
 											    JABBER_CAPS_VERSION | JABBER_CAPS_LAST_ACTIVITY | JABBER_CAPS_DATA_FORMS | JABBER_CAPS_VCARD_TEMP | \
 												 JABBER_CAPS_ENTITY_TIME | JABBER_CAPS_PING | JABBER_CAPS_PRIVACY_LISTS | JABBER_CAPS_MESSAGE_RECEIPTS | JABBER_CAPS_PRIVATE_STORAGE | \
-												 JABBER_CAPS_ROSTER_EXCHANGE | JABBER_CAPS_DIRECT_MUC_INVITE | JABBER_CAPS_CHAT_MARKERS)
+												 JABBER_CAPS_ROSTER_EXCHANGE | JABBER_CAPS_DIRECT_MUC_INVITE | JABBER_CAPS_CHAT_MARKERS | JABBER_CAPS_BITS | JABBER_CAPS_XHTML)
 
 #define JABBER_CAPS_MIRANDA_ALL     (JABBER_CAPS_MIRANDA_PARTIAL | JABBER_CAPS_COMMANDS | \
-                                     JABBER_CAPS_USER_MOOD_NOTIFY | JABBER_CAPS_USER_TUNE_NOTIFY | JABBER_CAPS_USER_ACTIVITY_NOTIFY  \
-									 | JABBER_CAPS_PLATFORMX86 | JABBER_CAPS_PLATFORMX64)
+                                     JABBER_CAPS_USER_MOOD_NOTIFY | JABBER_CAPS_USER_TUNE_NOTIFY | JABBER_CAPS_USER_ACTIVITY_NOTIFY | \
+												 JABBER_CAPS_PLATFORMX86 | JABBER_CAPS_PLATFORMX64)
 
 #define JABBER_XMLNS_FORWARD                    "urn:xmpp:forward:0"
 
@@ -257,15 +265,13 @@ typedef unsigned __int64 JabberCapsBits;
 
 class CJabberClientPartialCaps
 {
-	friend struct CJabberProto;
-
 	ptrA m_szHash, m_szOs, m_szOsVer, m_szSoft, m_szSoftVer, m_szSoftMir;
-	JabberCapsBits m_jcbCaps;
-	int m_nIqId;
-	DWORD m_dwRequestTime;
+	JabberCapsBits m_jcbCaps = JABBER_RESOURCE_CAPS_UNINIT;
+	int m_nIqId = -1, m_iTime;
+	DWORD m_dwRequestTime = 0;
 
 	class CJabberClientCaps *m_parent;
-	CJabberClientPartialCaps *m_pNext;
+	CJabberClientPartialCaps *m_pNext = nullptr;
 
 public:
 	CJabberClientPartialCaps(CJabberClientCaps *pParent, const char *szHash, const char *szVer);
@@ -279,6 +285,7 @@ public:
 	void SetCaps(JabberCapsBits jcbCaps, int nIqId = -1);
 	JabberCapsBits GetCaps();
 
+	__inline int GetTime() const { return m_iTime; }
 	__inline const char* GetHash() const { return m_szHash.get(); }
 	__inline const char* GetNode() const;
 
@@ -287,6 +294,13 @@ public:
 	__inline const char* GetSoft() const { return m_szSoft.get(); }
 	__inline const char* GetSoftVer() const { return m_szSoftVer.get(); }
 	__inline const char* GetSoftMir() const { return m_szSoftMir.get(); }
+
+	__inline void SetTime(int val) { m_iTime = val; }
+	__inline void SetOs(const char *str) { m_szOs = mir_strdup(str); }
+	__inline void SetOsVer(const char *str) { m_szOsVer = mir_strdup(str); }
+	__inline void SetSoft(const char *str) { m_szSoft = mir_strdup(str); }
+	__inline void SetSoftVer(const char *str) { m_szSoftVer = mir_strdup(str); }
+	__inline void SetSoftMir(const char *str) { m_szSoftMir = mir_strdup(str); }
 
 	__inline int GetIqId() const { return m_nIqId; }
 
@@ -311,7 +325,8 @@ public:
 	JabberCapsBits            GetPartialCaps(const char *szVer);
 	CJabberClientPartialCaps* SetPartialCaps(const char *szHash, const char *szVer, JabberCapsBits jcbCaps, int nIqId = -1);
 
-	__inline char* GetNode() const { return m_szNode; }
+	__inline char *GetNode() const { return m_szNode; }
+	__inline CJabberClientPartialCaps *GetFirst() const { return m_pCaps; }
 };
 
 __inline const char* CJabberClientPartialCaps::GetNode() const { return m_parent->GetNode(); }
@@ -321,29 +336,20 @@ class CJabberClientCapsManager
 	mir_cs m_cs;
 	OBJLIST<CJabberClientCaps> m_arCaps;
 
-	CJabberProto *ppro;
-	CMStringA m_szFeaturesCrc;
-
 protected:
 	CJabberClientCaps* FindClient(const char *szNode);
 
 public:
-	CJabberClientCapsManager(CJabberProto *proto);
+	CJabberClientCapsManager();
 	~CJabberClientCapsManager();
 
-	const char* GetFeaturesCrc();
-	void UpdateFeatHash();
+	void Load();
+	void Save();
 
 	JabberCapsBits GetClientCaps(const char *szNode, const char *szHash);
 	CJabberClientPartialCaps* GetPartialCaps(const char *szNode, const char *szHash);
 
 	CJabberClientPartialCaps* SetClientCaps(const char *szNode, const char *szHash, const char *szVer, JabberCapsBits jcbCaps, int nIqId = -1);
-	__inline CJabberClientPartialCaps* SetOwnCaps(const char *szNode, const char *szVer, JabberCapsBits jcbCaps, int nIqId = -1)
-	{
-		return SetClientCaps(szNode, m_szFeaturesCrc, szVer, jcbCaps, nIqId);
-	}
-
-	bool HandleInfoRequest(const TiXmlElement *iqNode, CJabberIqInfo *pInfo, const char *szNode);
 };
 
 struct JabberFeatCapPair

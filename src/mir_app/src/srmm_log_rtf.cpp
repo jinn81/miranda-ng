@@ -71,7 +71,7 @@ void CRtfLogWindow::Detach()
 bool CRtfLogWindow::AtBottom()
 {
 	if (!(GetWindowLongPtr(m_rtf.GetHwnd(), GWL_STYLE) & WS_VSCROLL))
-		return true;
+		return false;
 
 	SCROLLINFO si = {};
 	si.cbSize = sizeof(si);
@@ -95,10 +95,34 @@ int CRtfLogWindow::GetType()
 	return 0;
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////
+
+static DWORD CALLBACK StreamOutCallback(DWORD_PTR dwCookie, LPBYTE pbBuff, LONG cb, LONG *pcb)
+{
+	CMStringW *str = (CMStringW *)dwCookie;
+	str->Append((wchar_t*)pbBuff, cb / 2);
+	*pcb = cb;
+	return 0;
+}
+
 wchar_t* CRtfLogWindow::GetSelection()
 {
-	return nullptr;
+	CHARRANGE sel;
+	SendMessage(m_rtf.GetHwnd(), EM_EXGETSEL, 0, (LPARAM)&sel);
+	if (sel.cpMin == sel.cpMax)
+		return nullptr;
+
+	CMStringW result;
+
+	EDITSTREAM stream;
+	memset(&stream, 0, sizeof(stream));
+	stream.pfnCallback = StreamOutCallback;
+	stream.dwCookie = (DWORD_PTR)&result;
+	SendMessage(m_rtf.GetHwnd(), EM_STREAMOUT, SF_TEXT | SF_UNICODE | SFF_SELECTION, (LPARAM)&stream);
+	return result.Detach();
 }
+
+/////////////////////////////////////////////////////////////////////////////////////////
 
 INT_PTR CRtfLogWindow::Notify(WPARAM, LPARAM lParam)
 {
@@ -254,7 +278,7 @@ INT_PTR CRtfLogWindow::WndProc(UINT msg, WPARAM wParam, LPARAM lParam)
 			pt.y = GET_Y_LPARAM(lParam);
 		}
 		ptl = pt;
-		ScreenToClient(m_rtf.GetHwnd(), (LPPOINT)&ptl);
+		ScreenToClient(m_rtf.GetHwnd(), &ptl);
 		{
 			wchar_t *pszWord = (wchar_t *)_alloca(8192);
 			pszWord[0] = '\0';
@@ -292,8 +316,25 @@ INT_PTR CRtfLogWindow::WndProc(UINT msg, WPARAM wParam, LPARAM lParam)
 			HMENU hSubMenu = GetSubMenu(hMenu, 0);
 			TranslateMenu(hSubMenu);
 			m_pDlg.m_bInMenu = true;
-			UINT uID = CreateGCMenu(m_rtf.GetHwnd(), hSubMenu, pt, m_pDlg.m_si, nullptr, pszWord);
+
+			int flags = MF_BYPOSITION | (GetRichTextLength(m_rtf.GetHwnd()) == 0 ? MF_GRAYED : MF_ENABLED);
+			EnableMenuItem(hSubMenu, 0, flags);
+			EnableMenuItem(hSubMenu, 2, flags);
+
+			if (pszWord && pszWord[0]) {
+				CMStringW wszText(FORMAT, TranslateT("Look up '%s':"), pszWord);
+				if (wszText.GetLength() > 30) {
+					wszText.Truncate(30);
+					wszText.AppendChar('\'');
+				}
+				ModifyMenu(hSubMenu, 4, MF_STRING | MF_BYPOSITION, 4, wszText);
+			}
+			else ModifyMenu(hSubMenu, 4, MF_STRING | MF_GRAYED | MF_BYPOSITION, 4, TranslateT("No word to look up"));
+
+			UINT uID = Chat_CreateMenu(m_rtf.GetHwnd(), hSubMenu, pt, m_pDlg.m_si, nullptr);
 			m_pDlg.m_bInMenu = false;
+			DestroyMenu(hMenu);
+
 			switch (uID) {
 			case 0:
 				PostMessage(m_pDlg.m_hwnd, WM_MOUSEACTIVATE, 0, 0);
@@ -363,9 +404,8 @@ INT_PTR CRtfLogWindow::WndProc(UINT msg, WPARAM wParam, LPARAM lParam)
 				Chat_DoEventHook(m_pDlg.m_si, GC_USER_LOGMENU, nullptr, nullptr, uID);
 				break;
 			}
-			DestroyMenu(hMenu);
 		}
-		break;
+		return 0;
 	}
 
 	LRESULT res = mir_callNextSubclass(m_rtf.GetHwnd(), stubLogProc, msg, wParam, lParam);

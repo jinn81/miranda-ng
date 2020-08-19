@@ -52,10 +52,47 @@ MIR_APP_DLL(PROTOCOLDESCRIPTOR*) Proto_IsProtocolLoaded(const char *szProtoName)
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
+MIR_APP_DLL(PROTO_INTERFACE *) Proto_GetInstance(MCONTACT hContact)
+{
+	PROTOACCOUNT *pa = Proto_GetAccount(hContact);
+	if (pa == nullptr || pa->bOldProto)
+		return nullptr;
+
+	PROTO_INTERFACE *ppi = pa->ppro;
+	return (ppi != nullptr && ppi->m_iVersion > 1) ? ppi : nullptr;
+}
+
+MIR_APP_DLL(PROTO_INTERFACE *) Proto_GetInstance(const char *szModule)
+{
+	PROTOACCOUNT *pa = Proto_GetAccount(szModule);
+	if (pa == nullptr || pa->bOldProto)
+		return nullptr;
+
+	PROTO_INTERFACE *ppi = pa->ppro;
+	return (ppi != nullptr && ppi->m_iVersion > 1) ? ppi : nullptr;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+
 MIR_APP_DLL(void) Proto_EnumProtocols(int *nProtos, PROTOCOLDESCRIPTOR ***pProtos)
 {
 	if (nProtos) *nProtos = g_arProtos.getCount();
 	if (pProtos) *pProtos = (PROTOCOLDESCRIPTOR **)g_arProtos.getArray();
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+
+static void __cdecl sttFakeAckThread(ACKDATA *ack)
+{
+	Sleep(100);
+	NotifyEventHooks(hAckEvent, 0, (LPARAM)ack);
+	delete ack;
+}
+
+MIR_APP_DLL(void) ProtoBroadcastAsync(const char *szModule, MCONTACT hContact, int type, int result, HANDLE hProcess, LPARAM lParam)
+{
+	ACKDATA ack = { szModule, hContact, type, result, hProcess, lParam };
+	mir_forkThread<ACKDATA>(sttFakeAckThread, new ACKDATA(ack));
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -81,121 +118,6 @@ void PROTO_INTERFACE::setAllContactStatuses(int iStatus, bool bSkipChats)
 		else setWord(hContact, "Status", iStatus);
 	}
 }
-
-/////////////////////////////////////////////////////////////////////////////////////////
-// protocol menus
-
-static HGENMENU hReqAuth = nullptr, hGrantAuth = nullptr, hRevokeAuth = nullptr;
-
-static INT_PTR __cdecl stubRequestAuth(WPARAM hContact, LPARAM)
-{
-	const char *szProto = Proto_GetBaseAccountName(hContact);
-	if (szProto)
-		ProtoCallService(szProto, PS_MENU_REQAUTH, hContact, 0);
-	return 0;
-}
-
-static INT_PTR __cdecl stubGrantAuth(WPARAM hContact, LPARAM)
-{
-	const char *szProto = Proto_GetBaseAccountName(hContact);
-	if (szProto)
-		ProtoCallService(szProto, PS_MENU_GRANTAUTH, hContact, 0);
-	return 0;
-}
-
-static INT_PTR __cdecl stubRevokeAuth(WPARAM hContact, LPARAM)
-{
-	const char *szProto = Proto_GetBaseAccountName(hContact);
-	if (szProto)
-		ProtoCallService(szProto, PS_MENU_REVOKEAUTH, hContact, 0);
-	return 0;
-}
-
-static int __cdecl ProtoPrebuildContactMenu(WPARAM, LPARAM)
-{
-	Menu_ShowItem(hReqAuth, false);
-	Menu_ShowItem(hGrantAuth, false);
-	Menu_ShowItem(hRevokeAuth, false);
-	return 0;
-}
-
-void InitProtoMenus(void)
-{
-	// "Request authorization"
-	CMenuItem mi(&g_plugin);
-	SET_UID(mi, 0x36375a1f, 0xc142, 0x4d6e, 0xa6, 0x57, 0xe4, 0x76, 0x5d, 0xbc, 0x59, 0x8e);
-	mi.pszService = "Proto/Menu/ReqAuth";
-	mi.name.a = LPGEN("Request authorization");
-	mi.position = -2000001002;
-	mi.hIcolibItem = Skin_GetIconHandle(SKINICON_AUTH_REQUEST);
-	hReqAuth = Menu_AddContactMenuItem(&mi);
-	CreateServiceFunction(mi.pszService, stubRequestAuth);
-
-	// "Grant authorization"
-	SET_UID(mi, 0x4c90452a, 0x869a, 0x4a81, 0xaf, 0xa8, 0x28, 0x34, 0xaf, 0x2b, 0x6b, 0x30);
-	mi.pszService = "Proto/Menu/GrantAuth";
-	mi.name.a = LPGEN("Grant authorization");
-	mi.position = -2000001001;
-	mi.hIcolibItem = Skin_GetIconHandle(SKINICON_AUTH_GRANT);
-	hGrantAuth = Menu_AddContactMenuItem(&mi);
-
-	// "Revoke authorization"
-	SET_UID(mi, 0x619efdcb, 0x99c0, 0x44a8, 0xbf, 0x28, 0xc3, 0xe0, 0x2f, 0xb3, 0x7e, 0x77);
-	mi.pszService = "Proto/Menu/RevokeAuth";
-	mi.name.a = LPGEN("Revoke authorization");
-	mi.position = -2000001000;
-	mi.hIcolibItem = Skin_GetIconHandle(SKINICON_AUTH_REVOKE);
-	hRevokeAuth = Menu_AddContactMenuItem(&mi);
-
-	HookEvent(ME_CLIST_PREBUILDCONTACTMENU, ProtoPrebuildContactMenu);
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////
-// protocol constructor & destructor
-
-PROTO_INTERFACE::PROTO_INTERFACE(const char *pszModuleName, const wchar_t *ptszUserName)
-{
-	m_iVersion = 2;
-	m_iStatus = m_iDesiredStatus = ID_STATUS_OFFLINE;
-	m_szModuleName = mir_strdup(pszModuleName);
-	m_tszUserName = mir_wstrdup(ptszUserName);
-	db_set_resident(m_szModuleName, "Status");
-
-	m_hmiReqAuth = hReqAuth;
-	m_hmiGrantAuth = hGrantAuth;
-	m_hmiRevokeAuth = hRevokeAuth;
-}
-
-PROTO_INTERFACE::~PROTO_INTERFACE()
-{
-	if (m_hNetlibUser)
-		Netlib_CloseHandle(m_hNetlibUser);
-
-	mir_free(m_szModuleName);
-	mir_free(m_tszUserName);
-
-	WindowList_Destroy(m_hWindowList);
-}
-
-void PROTO_INTERFACE::OnBuildProtoMenu()
-{}
-
-void PROTO_INTERFACE::OnContactDeleted(MCONTACT)
-{}
-
-void PROTO_INTERFACE::OnErase()
-{}
-
-void PROTO_INTERFACE::OnModulesLoaded()
-{}
-
-bool PROTO_INTERFACE::IsReadyToExit()
-{
-	return true;
-}
-
-void PROTO_INTERFACE::OnShutdown()
-{}
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // protocol services
@@ -287,6 +209,8 @@ MIR_APP_DLL(LPCTSTR) ProtoGetAvatarExtension(int format)
 		return L".swf";
 	if (format == PA_FORMAT_XML)
 		return L".xml";
+	if (format == PA_FORMAT_WEBP)
+		return L".webp";
 
 	return L"";
 }
@@ -321,6 +245,9 @@ MIR_APP_DLL(int) ProtoGetAvatarFormat(const wchar_t *ptszFileName)
 	if (!wcsicmp(ptszExt, L".xml"))
 		return PA_FORMAT_XML;
 
+	if (!wcsicmp(ptszExt, L".webp"))
+		return PA_FORMAT_WEBP;
+
 	return PA_FORMAT_UNKNOWN;
 }
 
@@ -350,6 +277,11 @@ MIR_APP_DLL(int) ProtoGetBufferFormat(const void *pBuffer, const wchar_t **ptszE
 		if (!memcmp(pBuffer, "BM", 2)) {
 			if (ptszExtension) *ptszExtension = L".bmp";
 			return PA_FORMAT_BMP;
+		}
+
+		if (!memcmp(pBuffer, "RIFF", 4) && !memcmp((char*)pBuffer+8, "WEBP", 4)) {
+			if (ptszExtension) *ptszExtension = L".webp";
+			return PA_FORMAT_WEBP;
 		}
 	}
 
@@ -383,7 +315,8 @@ static char *wszMimeTypes[] =
 	"image/bmp",                // PA_FORMAT_BMP
 	"image/gif",                // PA_FORMAT_GIF
 	"image/swf",                // PA_FORMAT_SWF
-	"application/xml"           // PA_FORMAT_XML
+	"application/xml",          // PA_FORMAT_XML
+	"image/webp",               // PA_FORMAT_WEBP
 };
 
 MIR_APP_DLL(const char*) ProtoGetAvatarMimeType(int iFileType)
@@ -400,185 +333,4 @@ MIR_APP_DLL(int) ProtoGetAvatarFormatByMimeType(const char *pwszMimeType)
 			return i;
 	
 	return PA_FORMAT_UNKNOWN;
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////
-// default PROTO_INTERFACE method implementations
-
-MCONTACT PROTO_INTERFACE::AddToList(int, PROTOSEARCHRESULT*)
-{
-	return 0; // error
-}
-
-MCONTACT PROTO_INTERFACE::AddToListByEvent(int, int, MEVENT)
-{
-	return 0; // error
-}
-
-int PROTO_INTERFACE::Authorize(MEVENT)
-{
-	return 1; // error
-}
-
-int PROTO_INTERFACE::AuthDeny(MEVENT, const wchar_t*)
-{
-	return 1; // error
-}
-
-int PROTO_INTERFACE::AuthRecv(MCONTACT, PROTORECVEVENT*)
-{
-	return 1; // error
-}
-
-int PROTO_INTERFACE::AuthRequest(MCONTACT, const wchar_t*)
-{
-	return 1; // error
-}
-
-HANDLE PROTO_INTERFACE::FileAllow(MCONTACT, HANDLE, const wchar_t*)
-{
-	return nullptr; // error
-}
-
-int PROTO_INTERFACE::FileCancel(MCONTACT, HANDLE)
-{
-	return 1; // error
-}
-
-int PROTO_INTERFACE::FileDeny(MCONTACT, HANDLE, const wchar_t*)
-{
-	return 1; // error
-}
-
-int PROTO_INTERFACE::FileResume(HANDLE, int*, const wchar_t**)
-{
-	return 1; // error
-}
-
-INT_PTR PROTO_INTERFACE::GetCaps(int, MCONTACT)
-{
-	return 0; // empty value
-}
-
-int PROTO_INTERFACE::GetInfo(MCONTACT, int)
-{
-	return 1; // error
-}
-
-HANDLE PROTO_INTERFACE::SearchBasic(const wchar_t*)
-{
-	return nullptr; // error
-}
-
-HANDLE PROTO_INTERFACE::SearchByEmail(const wchar_t*)
-{
-	return nullptr; // error
-}
-
-HANDLE PROTO_INTERFACE::SearchByName(const wchar_t*, const wchar_t*, const wchar_t*)
-{
-	return nullptr; // error
-}
-
-HWND PROTO_INTERFACE::SearchAdvanced(HWND)
-{
-	return nullptr; // error
-}
-
-HWND PROTO_INTERFACE::CreateExtendedSearchUI(HWND)
-{
-	return nullptr; // error
-}
-
-int PROTO_INTERFACE::RecvContacts(MCONTACT, PROTORECVEVENT*)
-{
-	return 1; // error
-}
-
-int PROTO_INTERFACE::RecvFile(MCONTACT hContact, PROTORECVFILE *pcre)
-{
-	CCSDATA ccs = { hContact, PSR_FILE, 0, (LPARAM)pcre };
-	return CallService(MS_PROTO_RECVFILET, 0, (LPARAM)&ccs);
-}
-
-MEVENT PROTO_INTERFACE::RecvMsg(MCONTACT hContact, PROTORECVEVENT *pre)
-{
-	if (pre->szMessage == nullptr)
-		return 0;
-
-	ptrA pszTemp;
-	mir_ptr<BYTE> pszBlob;
-
-	DBEVENTINFO dbei = {};
-	dbei.flags = DBEF_UTF;
-	dbei.szModule = Proto_GetBaseAccountName(hContact);
-	dbei.timestamp = pre->timestamp;
-	dbei.eventType = EVENTTYPE_MESSAGE;
-	dbei.cbBlob = (DWORD)mir_strlen(pre->szMessage) + 1;
-	dbei.pBlob = (PBYTE)pre->szMessage;
-
-	if (pre->flags & PREF_CREATEREAD)
-		dbei.flags |= DBEF_READ;
-	if (pre->flags & PREF_SENT)
-		dbei.flags |= DBEF_SENT;
-
-	// if it's possible to find an existing event by its id, do that
-	if ((GetCaps(PFLAGNUM_4) & PF4_SERVERMSGID) && pre->szMsgId != nullptr) {
-		MEVENT hDbEvent = db_event_getById(m_szModuleName, pre->szMsgId);
-		if (hDbEvent == 0 || db_event_edit(hContact, hDbEvent, &dbei)) {
-			hDbEvent = db_event_add(hContact, &dbei);
-			if (hDbEvent)
-				db_event_setId(m_szModuleName, hDbEvent, pre->szMsgId);
-		}
-
-		return hDbEvent;
-	}
-
-	// event is new? add it
-	return (INT_PTR)db_event_add(hContact, &dbei);
-}
-
-int PROTO_INTERFACE::SendContacts(MCONTACT, int, int, MCONTACT*)
-{
-	return 1; // error
-}
-
-HANDLE PROTO_INTERFACE::SendFile(MCONTACT, const wchar_t*, wchar_t**)
-{
-	return nullptr; // error
-}
-
-int PROTO_INTERFACE::SendMsg(MCONTACT, int, const char*)
-{
-	return 0; // error
-}
-
-int PROTO_INTERFACE::SetApparentMode(MCONTACT, int)
-{
-	return 1; // error
-}
-
-int PROTO_INTERFACE::SetStatus(int)
-{
-	return 1; // you better declare it
-}
-
-HANDLE PROTO_INTERFACE::GetAwayMsg(MCONTACT)
-{
-	return nullptr; // no away message
-}
-
-int PROTO_INTERFACE::RecvAwayMsg(MCONTACT, int, PROTORECVEVENT*)
-{
-	return 1; // error
-}
-
-int PROTO_INTERFACE::SetAwayMsg(int, const wchar_t*)
-{
-	return 1; // error
-}
-
-int PROTO_INTERFACE::UserIsTyping(MCONTACT, int)
-{
-	return 1; // error
 }

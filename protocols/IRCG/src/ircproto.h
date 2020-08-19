@@ -55,7 +55,7 @@ struct CIrcProto : public PROTO<CIrcProto>
 	HANDLE   FileAllow(MCONTACT hContact, HANDLE hTransfer, const wchar_t *szPath) override;
 	int      FileCancel(MCONTACT hContact, HANDLE hTransfer) override;
 	int      FileDeny(MCONTACT hContact, HANDLE hTransfer, const wchar_t *szReason) override;
-	int      FileResume(HANDLE hTransfer, int *action, const wchar_t **szFilename) override;
+	int      FileResume(HANDLE hTransfer, int action, const wchar_t *szFilename) override;
 			   
 	INT_PTR  GetCaps(int type, MCONTACT hContact = NULL) override;
 			   
@@ -232,9 +232,6 @@ struct CIrcProto : public PROTO<CIrcProto>
 
 	// ircproto.cpp
 	void __cdecl AckBasicSearch(void* param);
-	void __cdecl AckMessageFail(void* info);
-	void __cdecl AckMessageFailDcc(void* info);
-	void __cdecl AckMessageSuccess(void* info);
 
 	int  SetStatusInternal(int iNewStatus, bool bIsInternal);
 

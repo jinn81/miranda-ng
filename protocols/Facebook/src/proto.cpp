@@ -41,16 +41,18 @@ FacebookProto::FacebookProto(const char *proto_name, const wchar_t *username) :
 	m_impl(*this),
 	m_users(50, CompareUsers),
 	arOwnMessages(1, CompareMessages),
+	m_bLoadAll(this, "LoadAllContacts", false),
 	m_bKeepUnread(this, "KeepUnread", false),
 	m_bUseBigAvatars(this, "UseBigAvatars", true),
 	m_bUseGroupchats(this, "UseGroupChats", true),
 	m_bHideGroupchats(this, "HideGroupChats", true),
+	m_bLoginInvisible(this, "LoginInvisible", false),
 	m_wszDefaultGroup(this, "DefaultGroup", L"Facebook")
 {
 	for (auto &cc : AccContacts()) {
 		CMStringA szId(getMStringA(cc, DBKEY_ID));
 		if (!szId.IsEmpty())
-			m_users.insert(new FacebookUser(_atoi64(szId), cc));
+			m_users.insert(new FacebookUser(_atoi64(szId), cc, isChatRoom(cc)));
 	}
 
 	// to upgrade previous settings
@@ -73,7 +75,9 @@ FacebookProto::FacebookProto(const char *proto_name, const wchar_t *username) :
 	m_szClientID = getMStringA(DBKEY_CLIENT_ID);
 	if (m_szClientID.IsEmpty()) {
 		for (int i = 0; i < 20; i++) {
-			int c = rand() % 62;
+			DWORD dwRandon;
+			Utils_GetRandom(&dwRandon, sizeof(dwRandon));
+			int c = dwRandon % 62;
 			if (c >= 0 && c < 26)
 				c += 'a';
 			else if (c >= 26 && c < 52)
@@ -129,6 +133,15 @@ FacebookProto::~FacebookProto()
 
 void FacebookProto::OnModulesLoaded()
 {
+	VARSW wszCache(L"%miranda_avatarcache%");
+
+	CMStringW wszPath(FORMAT, L"%s\\%S\\Stickers\\*.png", wszCache.get(), m_szModuleName);
+	SMADD_CONT cont = { 2, m_szModuleName, wszPath };
+	CallService(MS_SMILEYADD_LOADCONTACTSMILEYS, 0, LPARAM(&cont));
+
+	wszPath.Format(L"%s\\%S\\Stickers\\*.webp", wszCache.get(), m_szModuleName);
+	cont.path = wszPath;
+	CallService(MS_SMILEYADD_LOADCONTACTSMILEYS, 0, LPARAM(&cont));
 }
 
 void FacebookProto::OnShutdown()
@@ -168,23 +181,17 @@ INT_PTR FacebookProto::GetCaps(int type, MCONTACT)
 		return FACEBOOK_MESSAGE_LIMIT;
 
 	case PFLAG_UNIQUEIDTEXT:
-		return (INT_PTR) "Facebook ID";
+		return (INT_PTR) L"Facebook ID";
 	}
 	return 0;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-void __cdecl FacebookProto::SendMessageAckThread(void *param)
-{
-	Sleep(100);
-	ProtoBroadcastAck((UINT_PTR)param, ACKTYPE_MESSAGE, ACKRESULT_FAILED, (HANDLE)1, (LPARAM)TranslateT("Protocol is offline or user isn't authorized yet"));
-}
-
 int FacebookProto::SendMsg(MCONTACT hContact, int, const char *pszSrc)
 {
 	if (!m_bOnline) {
-		ForkThread(&FacebookProto::SendMessageAckThread, (void *)hContact);
+		ProtoBroadcastAsync(hContact, ACKTYPE_MESSAGE, ACKRESULT_FAILED, (HANDLE)1, (LPARAM)TranslateT("Protocol is offline or user isn't authorized yet"));
 		return 1;
 	}
 
@@ -197,7 +204,7 @@ int FacebookProto::SendMsg(MCONTACT hContact, int, const char *pszSrc)
 	JSONNode root; root << CHAR_PARAM("body", pszSrc) << INT64_PARAM("msgid", msgId) << INT64_PARAM("sender_fbid", m_uid) << CHAR_PARAM("to", userId);
 	MqttPublish("/send_message2", root);
 
-	arOwnMessages.insert(new COwnMessage(msgId, m_mid));
+	arOwnMessages.insert(new COwnMessage(msgId, m_mid, hContact));
 	return m_mid;
 }
 
@@ -213,16 +220,11 @@ int FacebookProto::SetStatus(int iNewStatus)
 	// Routing statuses not supported by Facebook
 	switch (iNewStatus) {
 	case ID_STATUS_ONLINE:
-	case ID_STATUS_AWAY:
-	case ID_STATUS_INVISIBLE:
 	case ID_STATUS_OFFLINE:
 		break;
 
-	case ID_STATUS_NA:
-		iNewStatus = ID_STATUS_AWAY;
-		break;
 	default:
-		iNewStatus = getByte(DBKEY_MAP_STATUSES) ? ID_STATUS_INVISIBLE : ID_STATUS_AWAY;
+		iNewStatus = ID_STATUS_AWAY;
 		break;
 	}
 
@@ -231,7 +233,6 @@ int FacebookProto::SetStatus(int iNewStatus)
 		return 0;
 	}
 
-	m_invisible = (iNewStatus == ID_STATUS_INVISIBLE);
 	m_iDesiredStatus = iNewStatus;
 
 	int iOldStatus = m_iStatus;
@@ -249,11 +250,7 @@ int FacebookProto::SetStatus(int iNewStatus)
 
 		ForkThread(&FacebookProto::ServerThread);
 	}
-	else {
-		// SetServerStatus(iNewStatus);
-
-		m_iStatus = iNewStatus;
-	}
+	else m_iStatus = iNewStatus;
 
 	ProtoBroadcastAck(0, ACKTYPE_STATUS, ACKRESULT_SUCCESS, (HANDLE)iOldStatus, m_iStatus);
 	return 0;

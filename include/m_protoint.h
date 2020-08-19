@@ -63,6 +63,14 @@ EXTERN_C MIR_APP_DLL(void) ProtoCreateServiceParam(PROTO_INTERFACE *pThis, const
 /////////////////////////////////////////////////////////////////////////////////////////
 // interface declaration
 
+enum ProtoMenuItemType
+{
+	PROTO_MENU_REQ_AUTH,
+	PROTO_MENU_GRANT_AUTH,
+	PROTO_MENU_REVOKE_AUTH,
+	PROTO_MENU_LOAD_HISTORY
+};
+
 struct MIR_APP_EXPORT PROTO_INTERFACE : public MZeroedObject
 {
 
@@ -79,9 +87,6 @@ public:
 	HANDLE      m_hProtoIcon = 0;  // icon to be displayed in the account manager
 	HNETLIBUSER m_hNetlibUser = 0; // network agent
 	HGENMENU    m_hmiMainMenu = 0; // if protocol menus are displayed in the main menu, this is the root
-	HGENMENU    m_hmiReqAuth;      // a menu item for /RequestAuth service
-	HGENMENU    m_hmiGrantAuth;    // a menu item for /GrantAuth service
-	HGENMENU    m_hmiRevokeAuth;   // a menu item for /RevokeAuth service
 
 	PROTO_INTERFACE(const char *pszModuleName, const wchar_t *ptszUserName);
 	~PROTO_INTERFACE();
@@ -91,6 +96,8 @@ public:
 
 	__forceinline INT_PTR ProtoBroadcastAck(MCONTACT hContact, int type, int hResult, HANDLE hProcess, LPARAM lParam = 0) {
 		return ::ProtoBroadcastAck(m_szModuleName, hContact, type, hResult, hProcess, lParam); }
+	__forceinline void ProtoBroadcastAsync(MCONTACT hContact, int type, int hResult, HANDLE hProcess, LPARAM lParam = 0) {
+		return ::ProtoBroadcastAsync(m_szModuleName, hContact, type, hResult, hProcess, lParam); }
 
 	__forceinline INT_PTR delSetting(const char *name) { return db_unset(NULL, m_szModuleName, name); }
 	__forceinline INT_PTR delSetting(MCONTACT hContact, const char *name) { return db_unset(hContact, m_szModuleName, name); }
@@ -132,30 +139,30 @@ public:
 	__forceinline INT_PTR getWString(MCONTACT hContact, const char *name, DBVARIANT *result) {
 		return db_get_s(hContact, m_szModuleName, name, result, DBVT_WCHAR); }
 
-	__forceinline char* getStringA(const char *name) {
-		return db_get_sa(NULL, m_szModuleName, name); }
-	__forceinline char* getStringA(MCONTACT hContact, const char *name) {
-		return db_get_sa(hContact, m_szModuleName, name); }
+	__forceinline char* getStringA(const char *name, const char *szValue = nullptr) {
+		return db_get_sa(NULL, m_szModuleName, name, szValue); }
+	__forceinline char* getStringA(MCONTACT hContact, const char *name, const char *szValue = nullptr) {
+		return db_get_sa(hContact, m_szModuleName, name, szValue); }
 
-	__forceinline char* getUStringA(const char *name) {
-		return db_get_utfa(NULL, m_szModuleName, name); }
-	__forceinline char* getUStringA(MCONTACT hContact, const char *name) {
-		return db_get_utfa(hContact, m_szModuleName, name); }
+	__forceinline char* getUStringA(const char *name, const char *szValue = nullptr) {
+		return db_get_utfa(NULL, m_szModuleName, name, szValue); }
+	__forceinline char* getUStringA(MCONTACT hContact, const char *name, const char *szValue = nullptr) {
+		return db_get_utfa(hContact, m_szModuleName, name, szValue); }
 
-	__forceinline wchar_t* getWStringA(const char *name) {
-		return db_get_wsa(NULL, m_szModuleName, name); }
-	__forceinline wchar_t* getWStringA(MCONTACT hContact, const char *name) {
-		return db_get_wsa(hContact, m_szModuleName, name); }
+	__forceinline wchar_t* getWStringA(const char *name, const wchar_t *szValue = nullptr) {
+		return db_get_wsa(NULL, m_szModuleName, name, szValue); }
+	__forceinline wchar_t* getWStringA(MCONTACT hContact, const char *name, const wchar_t *szValue = nullptr) {
+		return db_get_wsa(hContact, m_szModuleName, name, szValue); }
 
-	__forceinline CMStringA getMStringA(const char *name) {
-		return db_get_sm(NULL, m_szModuleName, name); }
-	__forceinline CMStringA getMStringA(MCONTACT hContact, const char *name) {
-		return db_get_sm(hContact, m_szModuleName, name); }
+	__forceinline CMStringA getMStringA(const char *name, const char *szValue = nullptr) {
+		return db_get_sm(NULL, m_szModuleName, name, szValue); }
+	__forceinline CMStringA getMStringA(MCONTACT hContact, const char *name, const char *szValue = nullptr) {
+		return db_get_sm(hContact, m_szModuleName, name, szValue); }
 	
-	__forceinline CMStringW getMStringW(const char *name) {
-		return db_get_wsm(NULL, m_szModuleName, name); }
-	__forceinline CMStringW getMStringW(MCONTACT hContact, const char *name) {
-		return db_get_wsm(hContact, m_szModuleName, name); }
+	__forceinline CMStringW getMStringW(const char *name, const wchar_t *szValue = nullptr) {
+		return db_get_wsm(NULL, m_szModuleName, name, szValue); }
+	__forceinline CMStringW getMStringW(MCONTACT hContact, const char *name, const wchar_t *szValue = nullptr) {
+		return db_get_wsm(hContact, m_szModuleName, name, szValue); }
 
 	__forceinline void setByte(const char *name, BYTE value) { db_set_b(NULL, m_szModuleName, name, value); }
 	__forceinline void setByte(MCONTACT hContact, const char *name, BYTE value) { db_set_b(hContact, m_szModuleName, name, value); }
@@ -190,46 +197,48 @@ public:
 	void WindowSubscribe(HWND hwnd);
 	void WindowUnsubscribe(HWND hwnd);
 
+	HGENMENU GetMenuItem(ProtoMenuItemType);
+
 	//////////////////////////////////////////////////////////////////////////////////////
 	// Virtual functions
 
-	virtual	MCONTACT AddToList(int flags, PROTOSEARCHRESULT* psr);
+	virtual	MCONTACT AddToList(int flags, PROTOSEARCHRESULT *psr);
 	virtual	MCONTACT AddToListByEvent(int flags, int iContact, MEVENT hDbEvent);
-						   
+
 	virtual	int      Authorize(MEVENT hDbEvent);
-	virtual	int      AuthDeny(MEVENT hDbEvent, const wchar_t* szReason);
-	virtual	int      AuthRecv(MCONTACT hContact, PROTORECVEVENT*);
-	virtual	int      AuthRequest(MCONTACT hContact, const wchar_t* szMessage);
-						   
-	virtual	HANDLE   FileAllow(MCONTACT hContact, HANDLE hTransfer, const wchar_t* szPath);
+	virtual	int      AuthDeny(MEVENT hDbEvent, const wchar_t *szReason);
+	virtual	int      AuthRecv(MCONTACT hContact, PROTORECVEVENT *);
+	virtual	int      AuthRequest(MCONTACT hContact, const wchar_t *szMessage);
+
+	virtual	HANDLE   FileAllow(MCONTACT hContact, HANDLE hTransfer, const wchar_t *szPath);
 	virtual	int      FileCancel(MCONTACT hContact, HANDLE hTransfer);
-	virtual	int      FileDeny(MCONTACT hContact, HANDLE hTransfer, const wchar_t* szReason);
-	virtual	int      FileResume(HANDLE hTransfer, int* action, const wchar_t** szFilename);
-						   
+	virtual	int      FileDeny(MCONTACT hContact, HANDLE hTransfer, const wchar_t *szReason);
+	virtual	int      FileResume(HANDLE hTransfer, int action, const wchar_t *szFilename);
+
 	virtual	INT_PTR  GetCaps(int type, MCONTACT hContact = NULL);
 	virtual	int      GetInfo(MCONTACT hContact, int infoType);
-						   
-	virtual	HANDLE   SearchBasic(const wchar_t* id);
-	virtual	HANDLE   SearchByEmail(const wchar_t* email);
-	virtual	HANDLE   SearchByName(const wchar_t* nick, const wchar_t* firstName, const wchar_t* lastName);
+
+	virtual	HANDLE   SearchBasic(const wchar_t *id);
+	virtual	HANDLE   SearchByEmail(const wchar_t *email);
+	virtual	HANDLE   SearchByName(const wchar_t *nick, const wchar_t *firstName, const wchar_t *lastName);
 	virtual	HWND     SearchAdvanced(HWND owner);
 	virtual	HWND     CreateExtendedSearchUI(HWND owner);
-						   
-	virtual	int      RecvContacts(MCONTACT hContact, PROTORECVEVENT*);
-	virtual	int      RecvFile(MCONTACT hContact, PROTORECVFILE*);
-	virtual	MEVENT   RecvMsg(MCONTACT hContact, PROTORECVEVENT*);
-						   
+
+	virtual	int      RecvContacts(MCONTACT hContact, PROTORECVEVENT *);
+	virtual	int      RecvFile(MCONTACT hContact, PROTORECVFILE *);
+	virtual	MEVENT   RecvMsg(MCONTACT hContact, PROTORECVEVENT *);
+
 	virtual	int      SendContacts(MCONTACT hContact, int flags, int nContacts, MCONTACT *hContactsList);
 	virtual	HANDLE   SendFile(MCONTACT hContact, const wchar_t *szDescription, wchar_t **ppszFiles);
 	virtual	int      SendMsg(MCONTACT hContact, int flags, const char *msg);
-						   
+
 	virtual	int      SetApparentMode(MCONTACT hContact, int mode);
 	virtual	int      SetStatus(int iNewStatus);
-						   
+
 	virtual	HANDLE   GetAwayMsg(MCONTACT hContact);
-	virtual	int      RecvAwayMsg(MCONTACT hContact, int mode, PROTORECVEVENT* evt);
-	virtual	int      SetAwayMsg(int iStatus, const wchar_t* msg);
-						   
+	virtual	int      RecvAwayMsg(MCONTACT hContact, int mode, PROTORECVEVENT *evt);
+	virtual	int      SetAwayMsg(int iStatus, const wchar_t *msg);
+
 	virtual	int      UserIsTyping(MCONTACT hContact, int type);
 						   
 	//////////////////////////////////////////////////////////////////////////////////////
@@ -240,6 +249,9 @@ public:
 
 	// called when an account's contact is deleted
 	virtual void OnContactDeleted(MCONTACT);
+
+	// called when an event is altered in database
+	virtual void OnEventEdited(MCONTACT, MEVENT);
 
 	// called when an account gets physically removed from the database
 	virtual void OnErase();
@@ -286,4 +298,10 @@ template<class T> struct PROTO : public PROTO_INTERFACE
 	__forceinline void CreateProtoServiceParam(const char *name, MyServiceFuncParam pFunc, LPARAM param) {
 		::ProtoCreateServiceParam(this, name, (ProtoServiceFuncParam)pFunc, param); }
 };
+
+/////////////////////////////////////////////////////////////////////////////////////////
+
+MIR_APP_DLL(PROTO_INTERFACE *) Proto_GetInstance(const char *szModule);
+MIR_APP_DLL(PROTO_INTERFACE *) Proto_GetInstance(MCONTACT hContact);
+
 #endif // M_PROTOINT_H__

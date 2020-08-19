@@ -33,12 +33,7 @@
 #define LANG_FINGERPRINT_VERIFIED			LPGENW("OTR encrypted session with '%s' is now using a VERIFIED fingerprint")
 #define LANG_FINGERPRINT_NOT_VERIFIED		LPGENW("OTR encrypted session with '%s' is now using a NOT VERIFIED fingerprint")
 
-#define LANG_GENERATE_KEY					LPGENW("Generating new private key for protocol '%s'.\nPlease Wait...")
-
-#define LANG_OPT_GENERAL					LPGENW("General")
-#define LANG_OPT_PROTO						LPGENW("Protocols")
-#define LANG_OPT_CONTACTS					LPGENW("Contacts")
-#define LANG_OPT_FINGER						LPGENW("Fingerprints")
+#define LANG_GENERATE_KEY					LPGENW("Generating new private key for account '%s'.\nPlease Wait...")
 
 #define LANG_CONTACT						LPGENW("Contact")
 #define LANG_PROTO							LPGENW("Account")

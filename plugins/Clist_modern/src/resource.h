@@ -1,13 +1,13 @@
 //{{NO_DEPENDENCIES}}
 // Microsoft Visual C++ generated include file.
-// Used by ..\res\resource.rc
+// Used by w:\miranda-ng\plugins\Clist_modern\res\resource.rc
 //
 #define IDC_ALWAYS_VISIBLEICON          0
 #define IDC_APPLY                       3
-#define IDD_OPT_ITEM_CONTACT_TIME       102
+#define IDD_OPT_ITEM_CONTACT_TIME       101
 #define IDI_MIRANDA                     102
 #define IDD_OPT_ROWTMPL                 103
-#define IDI_SMS                         103
+#define IDI_SMS                         104
 #define IDD_OPT_CLIST                   126
 #define IDD_OPT_SOUND                   134
 #define IDD_OPT_HOTKEYS                 134
@@ -114,14 +114,10 @@
 #define IDC_TOOLWND                     1097
 #define IDC_ONECLK                      1098
 #define IDC_SHOWCAPTION                 1098
-#define IDC_HIDEOFFLINE                 1099
-#define IDC_HIDEEMPTYGROUPS             1100
 #define IDC_FADEINOUT                   1101
 #define IDC_AUTOSIZE                    1102
-#define IDC_DISABLEGROUPS               1102
 #define IDC_AUTOSIZEUPWARD              1103
 #define IDC_ALWAYSSTATUS                1103
-#define IDC_CONFIRMDELETE               1104
 #define IDC_LOCKSIZING                  1111
 #define IDC_TRANSPARENT                 1124
 #define IDC_TRANSINACTIVE               1126
@@ -177,7 +173,6 @@
 #define IDC_TILEV                       1301
 #define IDC_GAMMACORRECT                1302
 #define IDC_TILEVROWH                   1302
-#define IDC_HIDEOFFLINEOPTS             1308
 #define IDC_CYCLETIME                   1318
 #define IDC_CYCLETIMESPIN               1319
 #define IDC_HIDETIMESPIN                1320
@@ -438,7 +433,6 @@
 #define IDC_CLSORT1                     6666
 #define IDC_CLSORT2                     6667
 #define IDC_CLSORT3                     6668
-#define IDC_ICONBLINK                   11720
 #define IDC_SHOW_AVATARS                11721
 #define IDC_SHOW_ANIAVATARS             11722
 #define IDC_HIDE_ICON_ON_AVATAR         11723
@@ -454,7 +448,7 @@
 #define IDC_PROTOCOLS                   19103
 #define IDC_ADDVIEWMODE                 19104
 #define IDC_DELETEVIEWMODE              19105
-#define IDC_NEWVIEMODE                  19106
+#define IDC_RENAMEVIEWMODE              19106
 #define IDC_GROUPS                      19107
 #define IDC_STATUSMODES                 19108
 #define IDC_CLIST                       19109
@@ -496,7 +490,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        511
+#define _APS_NEXT_RESOURCE_VALUE        512
 #define _APS_NEXT_COMMAND_VALUE         40022
 #define _APS_NEXT_CONTROL_VALUE         2025
 #define _APS_NEXT_SYMED_VALUE           101

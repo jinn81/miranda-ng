@@ -463,7 +463,7 @@ void TContainerData::LoadOverrideTheme()
 				memcpy(m_rtl_templates, &RTL_Active, sizeof(TTemplateSet));
 			}
 
-			m_theme.logFonts = (LOGFONTA *)mir_alloc(sizeof(LOGFONTA) * (MSGDLGFONTCOUNT + 2));
+			m_theme.logFonts = (LOGFONTW *)mir_alloc(sizeof(LOGFONTW) * (MSGDLGFONTCOUNT + 2));
 			m_theme.fontColors = (COLORREF *)mir_alloc(sizeof(COLORREF) * (MSGDLGFONTCOUNT + 2));
 			m_theme.rtfFonts = (char *)mir_alloc((MSGDLGFONTCOUNT + 2) * RTFCACHELINESIZE);
 
@@ -510,6 +510,15 @@ void TContainerData::LoadThemeDefaults()
 	m_rtl_templates = &RTL_Active;
 	m_theme.dwFlags = (M.GetDword("mwflags", MWF_LOG_DEFAULT) & MWF_LOG_ALL);
 	m_theme.isPrivate = false;
+}
+
+void TContainerData::QueryClientArea(RECT &rc)
+{
+	if (!IsIconic(m_hwnd))
+		GetClientRect(m_hwnd, &rc);
+	else
+		CopyRect(&rc, &m_rcSaved);
+	AdjustTabClientRect(rc);
 }
 
 // search tab with either next or most recent unread message and select it
@@ -1369,7 +1378,7 @@ panel_found:
 				if (iSelection - IDM_CONTAINERMENU >= 0) {
 					ptrW tszName(db_get_wsa(0, CONTAINER_KEY, szIndex));
 					if (hDlg && tszName != nullptr)
-						SendMessage(hDlg, DM_CONTAINERSELECTED, 0, tszName);
+						dat->SwitchToContainer(tszName);
 				}
 				return 1;
 			}
@@ -1394,7 +1403,7 @@ panel_found:
 					db_unset(dat->m_hContact, SRMSGMOD_T, "tabindex");
 				break;
 			case ID_TABMENU_LEAVECHATROOM:
-				if (dat && dat->isChat() && dat->m_hContact) {
+				if (dat && dat->isChat()) {
 					char *szProto = Proto_GetBaseAccountName(dat->m_hContact);
 					if (szProto)
 						CallProtoService(szProto, PS_LEAVECHAT, dat->m_hContact, 0);
@@ -1403,11 +1412,10 @@ panel_found:
 			case ID_TABMENU_ATTACHTOCONTAINER:
 				hDlg = GetTabWindow(pContainer->m_hwndTabs, GetTabItemFromMouse(pContainer->m_hwndTabs, &pt));
 				if (hDlg)
-					CreateDialogParam(g_plugin.getInst(), MAKEINTRESOURCE(IDD_SELECTCONTAINER), hwndDlg, SelectContainerDlgProc, (LPARAM)hDlg);
+					((CMsgDialog *)GetWindowLongPtr(hDlg, GWLP_USERDATA))->SelectContainer();
 				break;
 			case ID_TABMENU_CONTAINEROPTIONS:
-				if (pContainer->m_hWndOptions == nullptr)
-					CreateDialogParam(g_plugin.getInst(), MAKEINTRESOURCE(IDD_CONTAINEROPTIONS), hwndDlg, DlgProcContainerOptions, (LPARAM)pContainer);
+				pContainer->OptionsDialog();
 				break;
 			case ID_TABMENU_CLOSECONTAINER:
 				SendMessage(hwndDlg, WM_CLOSE, 0, 0);
@@ -1748,10 +1756,9 @@ panel_found:
 			pContainer->ApplySetting(true);
 			break;
 		case IDM_MOREOPTIONS:
-			if (IsIconic(pContainer->m_hwnd))
-				SendMessage(pContainer->m_hwnd, WM_SYSCOMMAND, SC_RESTORE, 0);
-			if (pContainer->m_hWndOptions == nullptr)
-				CreateDialogParam(g_plugin.getInst(), MAKEINTRESOURCE(IDD_CONTAINEROPTIONS), hwndDlg, DlgProcContainerOptions, (LPARAM)pContainer);
+			if (IsIconic(hwndDlg))
+				SendMessage(hwndDlg, WM_SYSCOMMAND, SC_RESTORE, 0);
+			pContainer->OptionsDialog();
 			break;
 		case SC_MAXIMIZE:
 			pContainer->m_oldSize.cx = pContainer->m_oldSize.cy = 0;
@@ -1978,30 +1985,17 @@ panel_found:
 	case WM_MEASUREITEM:
 		return Menu_MeasureItem(lParam);
 
-	case DM_QUERYCLIENTAREA:
-		{
-			RECT *pRect = (RECT*)lParam;
-			if (pRect) {
-				if (!IsIconic(hwndDlg))
-					GetClientRect(hwndDlg, pRect);
-				else
-					CopyRect(pRect, &pContainer->m_rcSaved);
-				pContainer->AdjustTabClientRect(*pRect);
-			}
-		}
-		return 0;
-
 	case WM_MOUSEWHEEL:
 		GetCursorPos(&pt);
 
 		if (pContainer->m_flags.m_bSideBar) {
 			RECT rc1;
-			GetWindowRect(GetDlgItem(pContainer->m_hwnd, IDC_SIDEBARUP), &rc);
-			GetWindowRect(GetDlgItem(pContainer->m_hwnd, IDC_SIDEBARDOWN), &rc1);
+			GetWindowRect(GetDlgItem(hwndDlg, IDC_SIDEBARUP), &rc);
+			GetWindowRect(GetDlgItem(hwndDlg, IDC_SIDEBARDOWN), &rc1);
 			rc.bottom = rc1.bottom;
 			if (PtInRect(&rc, pt)) {
 				short amount = (short)(HIWORD(wParam));
-				SendMessage(pContainer->m_hwnd, WM_COMMAND, MAKELONG(amount > 0 ? IDC_SIDEBARUP : IDC_SIDEBARDOWN, 0), IDC_SRMM_MESSAGE);
+				SendMessage(hwndDlg, WM_COMMAND, MAKELONG(amount > 0 ? IDC_SIDEBARUP : IDC_SIDEBARDOWN, 0), IDC_SRMM_MESSAGE);
 				return 0;
 			}
 		}
@@ -2155,7 +2149,7 @@ TContainerData* TSAPI CreateContainer(const wchar_t *name, int iTemp, MCONTACT h
 		return nullptr;
 
 	TContainerData *pContainer = new TContainerData();
-	wcsncpy(pContainer->m_wszName, name, CONTAINER_NAMELEN + 1);
+	wcsncpy_s(pContainer->m_wszName, name, _TRUNCATE);
 	AppendToContainerList(pContainer);
 
 	if (M.GetByte("limittabs", 0) && !mir_wstrcmp(name, L"default"))
@@ -2221,6 +2215,81 @@ int TSAPI ActivateTabFromHWND(HWND hwndTab, HWND hwnd)
 		return iItem;
 	}
 	return -1;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+
+void TSAPI AutoCreateWindow(MCONTACT hContact, MEVENT hDbEvent)
+{
+	wchar_t szName[CONTAINER_NAMELEN + 1];
+	GetContainerNameForContact(hContact, szName, CONTAINER_NAMELEN);
+
+	bool bAllowAutoCreate = false;
+	bool bAutoCreate = M.GetBool("autotabs", true);
+	bool bAutoPopup = M.GetBool(SRMSGSET_AUTOPOPUP, SRMSGDEFSET_AUTOPOPUP);
+	bool bAutoContainer = M.GetBool("autocontainer", true);
+
+	DWORD dwStatusMask = M.GetDword("autopopupmask", -1);
+	if (dwStatusMask == -1)
+		bAllowAutoCreate = true;
+	else {
+		char *szProto = Proto_GetBaseAccountName(hContact);
+		if (szProto && !mir_strcmp(szProto, META_PROTO))
+			szProto = Proto_GetBaseAccountName(db_mc_getSrmmSub(hContact));
+
+		if (szProto) {
+			int dwStatus = Proto_GetStatus(szProto);
+			if (dwStatus == 0 || dwStatus <= ID_STATUS_OFFLINE || ((1 << (dwStatus - ID_STATUS_ONLINE)) & dwStatusMask))           // should never happen, but...
+				bAllowAutoCreate = true;
+		}
+	}
+
+	if (bAllowAutoCreate && (bAutoPopup || bAutoCreate)) {
+		if (bAutoPopup) {
+			TContainerData *pContainer = FindContainerByName(szName);
+			if (pContainer == nullptr)
+				pContainer = CreateContainer(szName, 0, hContact);
+			if (pContainer)
+				CreateNewTabForContact(pContainer, hContact, true, true, false);
+			return;
+		}
+
+		bool bPopup = M.GetByte("cpopup", 0) != 0;
+		TContainerData *pContainer = FindContainerByName(szName);
+		if (pContainer != nullptr)
+			if (M.GetByte("limittabs", 0) && !wcsncmp(pContainer->m_wszName, L"default", 6))
+				pContainer = FindMatchingContainer(L"default");
+
+		if (pContainer == nullptr && bAutoContainer)
+			pContainer = CreateContainer(szName, CNT_CREATEFLAG_MINIMIZED, hContact);
+
+		if (pContainer != nullptr) {
+			CreateNewTabForContact(pContainer, hContact, false, bPopup, true, hDbEvent);
+			return;
+		}
+	}
+
+	// no window created, simply add an unread event to contact list
+	DBEVENTINFO dbei = {};
+	db_event_get(hDbEvent, &dbei);
+
+	if (!(dbei.flags & DBEF_READ)) {
+		AddUnreadContact(hContact);
+
+		wchar_t toolTip[256];
+		mir_snwprintf(toolTip, TranslateT("Message from %s"), Clist_GetContactDisplayName(hContact));
+
+		CLISTEVENT cle = {};
+		cle.hContact = hContact;
+		cle.hDbEvent = hDbEvent;
+		cle.flags = CLEF_UNICODE;
+		cle.hIcon = Skin_LoadIcon(SKINICON_EVENT_MESSAGE);
+		cle.pszService = MS_MSG_READMESSAGE;
+		cle.szTooltip.w = toolTip;
+		g_clistApi.pfnAddEvent(&cle);
+
+		tabSRMM_ShowPopup(hContact, hDbEvent, dbei.eventType, 0, nullptr, nullptr, dbei.szModule);
+	}
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////

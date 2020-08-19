@@ -2,7 +2,7 @@
 ;============================================================
 ;  File: MirOTR.dll
 ;  Plugin: Miranda OTR
-;  Version: 0.14.2.1
+;  Version: 0.14.2.2
 ;  Authors: ProgAndy & CHEF-KOCH
 ;============================================================
 [OTR (Off-the-Record) plugin for Miranda NG (using some code and ideas from SecureIM, Pidgin-OTR and old Miranda OTR (by SJE)).]
@@ -11,7 +11,7 @@
 [OTR Generating Private Key]
 OTR Создание личного ключа
 [Generating new private key - please wait.]
-Генерация нового частного ключа - подождите.
+Генерация нового приватного ключа, подождите.
 [Default Policy]
 Политика по умолчанию:
 [Always]
@@ -40,24 +40,14 @@ OTR Создание личного ключа
 Показывать системные сообщения во всплывающем окне
 [Show verification dialog when receiving unverified fingerprint]
 Диалог подтверждения при получении непроверенного отпечатка
-[Set OTR policy per protocol]
-Установить политику OTR попротокольно
+[Set OTR policy per account]
+Задать политику OTR индивидуально для каждой учётной записи
 [Current policy:]
 Текущая политика:
-[Generate new private key]
-Генерация нового частного ключа
-[Forget private key]
-Забыть частный ключ
 [Set OTR policy per contact]
 Установить политику OTR поконтактно
 [View & Modify status of known fingerprints]
 Просмотр и редактирование статусов известных отпечатков
-[Set verified]
-Проверено
-[Set unknown]
-Неизвестно
-[Forget]
-Забыть
 [Socialist Millionaires Protocol]
 Протокол социалистических миллионеров
 [Socialist Millionaires Protocol\r\nVerification progress]
@@ -80,6 +70,18 @@ OTR Создание личного ключа
 Остановить& OTR-сессию
 [&Verify Fingerprint]
 &Проверка отпечатков
+[Set verified]
+Проверено
+[Set unknown]
+Неизвестно
+[Copy]
+Копировать
+[Forget]
+Забыть
+[Generate new private key]
+Генерация нового приватного ключа
+[Forget private key]
+Забыть частный ключ
 ;file \plugins\MirOTR\src\icons.cpp
 [OTR private]
 Частный OTR
@@ -140,16 +142,8 @@ OTR не может шифровать во время отправки сооб
 Шифрованная сессия с '%s' теперь использует ПРОВЕРЕННЫЙ отпечаток.
 [OTR encrypted session with '%s' is now using a NOT VERIFIED fingerprint]
 Шифрованная сессия с '%s' теперь использует НЕПРОВЕРЕННЫЙ отпечаток.
-[Generating new private key for protocol '%s'.\nPlease Wait...]
-Создание нового частного ключа для протокола '%s'.\nПодождите...
-[General]
-Общее
-[Protocols]
-Протоколы
-[Contacts]
-Контакты
-[Fingerprints]
-Отпечатки
+[Generating new private key for account '%s'.\nPlease Wait...]
+Создание нового приватного ключа для учётной записи '%s'.\nПодождите...
 [Contact]
 Контакт
 [Account]
@@ -242,6 +236,14 @@ OTR: установлен SecureIM
 Личные данные
 [Services]
 Службы
+[General]
+Общее
+[Accounts]
+Учётные записи
+[Contacts]
+Контакты
+[Fingerprints]
+Отпечатки
 ;file \plugins\MirOTR\src\otr.cpp
 [\nusing older protocol version %i]
 \nиспользуя старый протокол версии %i

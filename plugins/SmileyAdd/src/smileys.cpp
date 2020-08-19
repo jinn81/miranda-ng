@@ -208,41 +208,6 @@ SmileyType* SmileyPackType::GetSmiley(unsigned index)
 	return (index < (unsigned)m_SmileyList.getCount()) ? &m_SmileyList[index] : nullptr;
 }
 
-static DWORD_PTR ConvertServiceParam(MCONTACT hContact, const wchar_t *param)
-{
-	if (param == nullptr)
-		return 0;
-	if (mir_wstrcmpi(L"hContact", param) == 0)
-		return hContact;
-	if (iswdigit(*param))
-		return _wtoi(param);
-
-	return (DWORD_PTR)param;
-}
-
-void SmileyType::CallSmileyService(MCONTACT hContact)
-{
-	MRegexp16 srvsplit(L"(.*)\\|(.*)\\|(.*)");
-	srvsplit.match(m_TriggerText);
-
-	CMStringW name = srvsplit.getGroup(1);
-	CMStringW par1 = srvsplit.getGroup(2);
-	CMStringW par2 = srvsplit.getGroup(3);
-
-	const char *proto = "";
-	if (name[0] == '/') {
-		proto = (const char*)Proto_GetBaseAccountName(hContact);
-		if (proto == nullptr)
-			return;
-	}
-
-	char str[MAXMODULELABELLENGTH];
-	mir_snprintf(str, "%s%S", proto, name.c_str());
-	CallService(str,
-		ConvertServiceParam(hContact, par1.c_str()),
-		ConvertServiceParam(hContact, par2.c_str()));
-}
-
 SmileyPackType::~SmileyPackType()
 {
 	if (m_hSmList != nullptr) ImageList_Destroy(m_hSmList);
@@ -703,7 +668,6 @@ SmileyCategoryType::SmileyCategoryType(SmileyPackListType *pSPS, const CMStringW
 	opt.ReadPackFileName(m_Filename, m_Name, defaultFilename);
 }
 
-
 void SmileyCategoryType::Load(void)
 {
 	bool bVisibleCat = opt.UsePhysProto ? !IsAcc() : !IsPhysProto();
@@ -822,8 +786,6 @@ void SmileyCategoryListType::AddAccountAsCategory(PROTOACCOUNT *acc, const CMStr
 			const char *packnam = acc->szProtoName;
 			if (mir_strcmp(packnam, "JABBER") == 0)
 				packnam = "JGMail";
-			else if (strstr(packnam, "SIP") != nullptr)
-				packnam = "MSN";
 
 			wchar_t path[MAX_PATH];
 			mir_snwprintf(path, L"%s\\Smileys\\nova\\%S.msl", g_plugin.wszDefaultPath, packnam);
@@ -844,8 +806,6 @@ void SmileyCategoryListType::AddProtoAsCategory(char *acc, const CMStringW &defa
 	const char *packnam = acc;
 	if (mir_strcmp(packnam, "JABBER") == 0)
 		packnam = "JGMail";
-	else if (strstr(packnam, "SIP") != nullptr)
-		packnam = "MSN";
 
 	// assemble default path
 	CMStringW paths(FORMAT, L"%s\\Smileys\\nova\\%S.msl", g_plugin.wszDefaultPath, packnam);
@@ -902,16 +862,8 @@ void SmileyCategoryListType::AddContactTransportAsCategory(MCONTACT hContact, co
 		_strlwr(trsp);
 
 		const char *packname = nullptr;
-		if (strstr(trsp, "msn") != nullptr)
-			packname = "msn";
-		else if (strstr(trsp, "icq") != nullptr)
+		if (strstr(trsp, "icq") != nullptr)
 			packname = "icq";
-		else if (strstr(trsp, "yahoo") != nullptr)
-			packname = "yahoo";
-		else if (strstr(trsp, "aim") != nullptr)
-			packname = "aim";
-		else if (strstr(trsp, "lcs") != nullptr)
-			packname = "msn";
 
 		mir_free(trsp);
 

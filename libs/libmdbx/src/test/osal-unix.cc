@@ -14,12 +14,16 @@
 
 #include "test.h"
 
+#if !(defined(_WIN32) || defined(_WIN64))
+
 #include <pthread.h>
 #include <signal.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+#include <atomic>
 
 #ifndef MDBX_LOCKING
 #error "Opps, MDBX_LOCKING is undefined!"
@@ -305,14 +309,14 @@ bool actor_config::osal_deserialize(const char *str, const char *end,
 
 static pid_t overlord_pid;
 
-static volatile sig_atomic_t sigusr1_head, sigusr2_head;
+static std::atomic<int> sigusr1_head, sigusr2_head;
 static void handler_SIGUSR(int signum) {
   switch (signum) {
   case SIGUSR1:
-    sigusr1_head += 1;
+    ++sigusr1_head;
     return;
   case SIGUSR2:
-    sigusr2_head += 1;
+    ++sigusr2_head;
     return;
   default:
     abort();
@@ -333,10 +337,10 @@ bool osal_progress_push(bool active) {
 
 static std::unordered_map<pid_t, actor_status> childs;
 
-static volatile sig_atomic_t sigalarm_head;
+static std::atomic<int> sigalarm_head;
 static void handler_SIGCHLD(int signum) {
   if (signum == SIGALRM)
-    sigalarm_head += 1;
+    ++sigalarm_head;
 }
 
 mdbx_pid_t osal_getpid(void) { return getpid(); }
@@ -515,9 +519,9 @@ std::string osal_tempdir(void) {
     tempdir = getenv("TEMPDIR");
   if (!tempdir)
     tempdir = getenv("TEMP");
-  if (tempdir) {
+  if (tempdir && *tempdir) {
     std::string dir(tempdir);
-    if (!dir.empty() && dir.at(dir.length() - 1) != '/')
+    if (dir.back() != '/')
       dir.append("/");
     return dir;
   }
@@ -529,3 +533,5 @@ std::string osal_tempdir(void) {
 int osal_removefile(const std::string &pathname) {
   return unlink(pathname.c_str()) ? errno : MDBX_SUCCESS;
 }
+
+#endif /* !Windows */

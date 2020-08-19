@@ -32,15 +32,6 @@ int StrToStatus(const CMStringW &str)
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-JSONNode& operator<<(JSONNode &json, const SINT64_PARAM &param)
-{
-	char str[40];
-	_i64toa(param.iValue, str, 10);
-	return json << CHAR_PARAM(param.szName, str);
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////
-
 time_t StringToDate(const CMStringW &str)
 {
 	struct tm T = { 0 };
@@ -324,7 +315,7 @@ void CDiscordProto::ProcessType(CDiscordUser *pUser, const JSONNode &pRoot)
 			setByte(pUser->hContact, DB_KEY_REQAUTH, 1);
 
 			CMStringA szId(FORMAT, "%lld", pUser->id);
-			DB_AUTH_BLOB blob(pUser->hContact, T2Utf(pUser->wszUsername), nullptr, nullptr, szId, nullptr);
+			DB::AUTH_BLOB blob(pUser->hContact, T2Utf(pUser->wszUsername), nullptr, nullptr, szId, nullptr);
 
 			PROTORECVEVENT pre = { 0 };
 			pre.timestamp = (DWORD)time(0);

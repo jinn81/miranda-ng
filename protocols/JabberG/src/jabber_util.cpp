@@ -76,6 +76,37 @@ CMStringA MakeJid(const char *jid, const char *resource)
 	return ret;
 }
 
+void CJabberProto::UpdateItem(JABBER_LIST_ITEM *pItem, const char *name)
+{
+	if (!m_bIgnoreRoster || db_get_wsm(pItem->hContact, "CList", "MyHandle").IsEmpty()) {
+		if (name != nullptr) {
+			ptrA tszNick(getUStringA(pItem->hContact, "Nick"));
+			if (tszNick != nullptr) {
+				if (mir_strcmp(pItem->nick, tszNick) != 0)
+					db_set_utf(pItem->hContact, "CList", "MyHandle", pItem->nick);
+				else
+					db_unset(pItem->hContact, "CList", "MyHandle");
+			}
+			else db_set_utf(pItem->hContact, "CList", "MyHandle", pItem->nick);
+		}
+		else db_unset(pItem->hContact, "CList", "MyHandle");
+	}
+
+	// check group delimiters
+	if (pItem->group && m_szGroupDelimiter) {
+		CMStringA szNewGroup(pItem->group);
+		szNewGroup.Replace(m_szGroupDelimiter, "\\");
+		replaceStr(pItem->group, szNewGroup.Detach());
+	}
+
+	if (!m_bIgnoreRoster) {
+		if (pItem->group != nullptr) {
+			Clist_GroupCreate(0, Utf2T(pItem->group));
+			db_set_utf(pItem->hContact, "CList", "Group", pItem->group);
+		}
+		else db_unset(pItem->hContact, "CList", "Group");
+	}
+}
 
 char* JabberNickFromJID(const char *jid)
 {
@@ -244,15 +275,15 @@ static JabberErrorCodeToStrMapping[] = {
 		{ JABBER_ERROR_REMOTE_SERVER_ERROR, LPGENW("Remote server error") },
 		{ JABBER_ERROR_SERVICE_UNAVAILABLE, LPGENW("Service unavailable") },
 		{ JABBER_ERROR_REMOTE_SERVER_TIMEOUT, LPGENW("Remote server timeout") },
-		{ -1, LPGENW("Unknown error") }
 };
 
 wchar_t* JabberErrorStr(int errorCode)
 {
-	int i;
+	for (auto &it : JabberErrorCodeToStrMapping)
+		if (it.code == errorCode)
+			return it.str;
 
-	for (i = 0; JabberErrorCodeToStrMapping[i].code != -1 && JabberErrorCodeToStrMapping[i].code != errorCode; i++);
-	return JabberErrorCodeToStrMapping[i].str;
+	return LPGENW("Unknown error");
 }
 
 CMStringW JabberErrorMsg(const TiXmlElement *errorNode, int *pErrorCode)
@@ -284,10 +315,9 @@ CMStringW JabberErrorMsg(const TiXmlElement *errorNode, int *pErrorCode)
 		}
 	}
 
+	ret.Format(L"%s %d: %s", TranslateT("Error"), errorCode, TranslateW(JabberErrorStr(errorCode)));
 	if (str != nullptr)
-		ret.Format(L"%s %d: %s\r\n%s", TranslateT("Error"), errorCode, TranslateW(JabberErrorStr(errorCode)), Utf2T(str).get());
-	else
-		ret.Format(L"%s %d: %s", TranslateT("Error"), errorCode, TranslateW(JabberErrorStr(errorCode)));
+		ret.AppendFormat(L"\r\n%s", Utf2T(str).get());
 
 	if (pErrorCode)
 		*pErrorCode = errorCode;
@@ -388,7 +418,7 @@ void CJabberProto::SendPresenceTo(int status, const char *to, const TiXmlElement
 	// XEP-0115:Entity Capabilities
 	if (m_bAllowVersionRequests) {
 		TiXmlElement *c = p << XCHILDNS("c", JABBER_FEAT_ENTITY_CAPS) << XATTR("hash", "sha-1") 
-			<< XATTR("node", JABBER_CAPS_MIRANDA_NODE) << XATTR("ver", m_clientCapsManager.GetFeaturesCrc());
+			<< XATTR("node", JABBER_CAPS_MIRANDA_NODE) << XATTR("ver", m_szFeaturesCrc);
 
 		LIST<char> arrExtCaps(5);
 		if (g_plugin.bSecureIM)
@@ -440,8 +470,12 @@ void CJabberProto::SendPresenceTo(int status, const char *to, const TiXmlElement
 		}
 	}
 
-	if (m_tmJabberIdleStartTime)
-		p << XQUERY(JABBER_FEAT_LAST_ACTIVITY) << XATTRI("seconds", time(0) - m_tmJabberIdleStartTime);
+	if (m_tmJabberIdleStartTime) {
+		// XEP-0319 support
+		char szSince[100];
+		time2str(m_tmJabberIdleStartTime, szSince, _countof(szSince));
+		p << XCHILDNS("idle", JABBER_FEAT_IDLE) << XATTR("since", szSince);
+	}
 
 	if (m_bEnableAvatars) {
 		TiXmlElement *x = p << XCHILDNS("x", "vcard-temp:x:update");
@@ -538,7 +572,7 @@ char* CJabberProto::GetClientJID(MCONTACT hContact, char *dest, size_t destLen)
 	if (hContact == 0)
 		return nullptr;
 
-	ptrA jid(getUStringA(hContact, "jid"));
+	ptrA jid(getUStringA(hContact, isChatRoom(hContact) ? "ChatRoomID" : "jid"));
 	return GetClientJID(jid, dest, destLen);
 }
 
@@ -548,12 +582,11 @@ char* CJabberProto::GetClientJID(const char *jid, char *dest, size_t destLen)
 		return nullptr;
 
 	strncpy_s(dest, destLen, jid, _TRUNCATE);
-	char *p = strchr(dest, '/');
 
 	mir_cslock lck(m_csLists);
 	JABBER_LIST_ITEM *LI = ListGetItemPtr(LIST_ROSTER, jid);
 	if (LI != nullptr) {
-		if (p == nullptr) {
+		if (strchr(dest, '/') == nullptr) {
 			pResourceStatus r(LI->getBestResource());
 			if (r != nullptr)
 				strncpy_s(dest, destLen, MakeJid(jid, r->m_szResourceName), _TRUNCATE);
@@ -931,10 +964,10 @@ void __cdecl CJabberProto::LoadHttpAvatars(void* param)
 							fwrite(res->pData, res->dataLength, 1, out);
 							fclose(out);
 							setString(ai.hContact, "AvatarHash", buffer);
-							ProtoBroadcastAck(ai.hContact, ACKTYPE_AVATAR, ACKRESULT_SUCCESS, &ai, 0);
+							ProtoBroadcastAck(ai.hContact, ACKTYPE_AVATAR, ACKRESULT_SUCCESS, &ai);
 							debugLogW(L"Broadcast new avatar: %s", ai.filename);
 						}
-						else ProtoBroadcastAck(ai.hContact, ACKTYPE_AVATAR, ACKRESULT_FAILED, &ai, 0);
+						else ProtoBroadcastAck(ai.hContact, ACKTYPE_AVATAR, ACKRESULT_FAILED, &ai);
 					}
 				}
 			}

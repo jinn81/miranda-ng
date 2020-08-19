@@ -235,9 +235,6 @@ int SendQueue::sendQueued(CMsgDialog *dat, const int iEntry)
 		return 0;
 	}
 
-	if (dat->m_hContact == 0)
-		return 0;  //never happens
-
 	size_t iMaxSize = dat->m_cache->getMaxMessageLength();
 
 	if (M.GetByte("autosplit", 0) && !(dat->m_sendMode & SMODE_SENDLATER)) {
@@ -361,7 +358,7 @@ void SendQueue::logError(CMsgDialog *dat, int iSendJobIndex, const wchar_t *szEr
 	dbei.cbBlob = (int)iMsgLen;
 	dbei.timestamp = time(0);
 	dbei.szModule = (char *)szErrMsg;
-	dat->LogEvent(&dbei);
+	dat->LogEvent(dbei);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -475,14 +472,13 @@ int SendQueue::ackMessage(CMsgDialog *dat, WPARAM wParam, LPARAM lParam)
 	if (job.dwFlags & PREF_RTL)
 		dbei.flags |= DBEF_RTL;
 	dbei.pBlob = (PBYTE)job.szSendBuffer;
+	dbei.szId = (char *)ack->lParam;
 
 	MessageWindowEvent evt = { job.iSendId, job.hContact, &dbei };
 	NotifyEventHooks(g_chatApi.hevPreCreate, 0, (LPARAM)&evt);
 
 	job.szSendBuffer = (char*)dbei.pBlob;
 	MEVENT hNewEvent = db_event_add(job.hContact, &dbei);
-	if (hNewEvent && ack->lParam)
-		db_event_setId(dbei.szModule, hNewEvent, (char*)ack->lParam);
 
 	if (m_pContainer)
 		if (!nen_options.iNoSounds && !m_pContainer->m_flags.m_bNoSound)
@@ -557,7 +553,7 @@ int SendQueue::doSendLater(int iJobIndex, CMsgDialog *dat, MCONTACT hContact, bo
 		dbei.timestamp = time(0);
 		dbei.cbBlob = (int)mir_strlen(utfText) + 1;
 		dbei.pBlob = (PBYTE)(char*)utfText;
-		dat->LogEvent(&dbei);
+		dat->LogEvent(dbei);
 
 		if (dat->m_hDbEventFirst == 0)
 			dat->RemakeLog();

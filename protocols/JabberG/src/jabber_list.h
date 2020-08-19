@@ -108,9 +108,6 @@ public:
 
 	JabberCapsBits m_jcbCachedCaps;
 	JabberCapsBits m_jcbManualDiscoveredCaps;
-
-	// XEP-0085 gone event support
-	BOOL m_bMessageSessionActive;
 };
 
 class pResourceStatus
@@ -204,7 +201,7 @@ struct JABBER_LIST_ITEM : public MZeroedObject
 	// jid = string representation of stream id (sid)
 	// ft = file transfer data
 
-	//LIST_BOOKMARK
+	// LIST_BOOKMARK
 	// jid = room JID
 	char *password;	// password for room
 	bool bAutoJoin;

@@ -617,17 +617,17 @@ bool XMLUtil::ToBool( const char* str, bool* value )
         *value = (ival==0) ? false : true;
         return true;
     }
-    static const char* szTRUE[] = { "true", "True", "TRUE", 0 };
-    static const char* szFALSE[] = { "false", "False", "FALSE", 0 };
+    static const char* TRUE_VALS[] = { "true", "True", "TRUE", 0 };
+    static const char* FALSE_VALS[] = { "false", "False", "FALSE", 0 };
 
-    for (int i = 0; szTRUE[i]; ++i) {
-        if (StringEqual(str, szTRUE[i])) {
+    for (int i = 0; TRUE_VALS[i]; ++i) {
+        if (StringEqual(str, TRUE_VALS[i])) {
             *value = true;
             return true;
         }
     }
-    for (int i = 0; szFALSE[i]; ++i) {
-        if (StringEqual(str, szFALSE[i])) {
+    for (int i = 0; FALSE_VALS[i]; ++i) {
+        if (StringEqual(str, FALSE_VALS[i])) {
             *value = false;
             return true;
         }
@@ -1917,11 +1917,17 @@ char* XMLElement::ParseAttributes( char* p, int* curLineNumPtr )
             const int attrLineNum = attrib->_parseLineNum;
 
             p = attrib->ParseDeep( p, _document->ProcessEntities(), curLineNumPtr );
-            if ( !p || Attribute( attrib->Name() ) ) {
+            if ( !p ) {
                 DeleteAttribute( attrib );
                 _document->SetError( XML_ERROR_PARSING_ATTRIBUTE, attrLineNum, "XMLElement name=%s", Name() );
                 return 0;
             }
+
+				if (Attribute(attrib->Name())) {
+				    DeleteAttribute(attrib);
+                continue;
+            }
+
             // There is a minor bug here: if the attribute in the source xml
             // document is duplicated, it will not be detected and the
             // attribute will be doubly added. However, tracking the 'prevAttribute'
@@ -1974,6 +1980,39 @@ XMLAttribute* XMLElement::CreateAttribute()
     attrib->_memPool->SetTracked();
     return attrib;
 }
+
+
+XMLElement* XMLElement::InsertNewChildElement(const char* name)
+{
+    XMLElement* node = _document->NewElement(name);
+    return InsertEndChild(node) ? node : 0;
+}
+
+XMLComment* XMLElement::InsertNewComment(const char* comment)
+{
+    XMLComment* node = _document->NewComment(comment);
+    return InsertEndChild(node) ? node : 0;
+}
+
+XMLText* XMLElement::InsertNewText(const char* text)
+{
+    XMLText* node = _document->NewText(text);
+    return InsertEndChild(node) ? node : 0;
+}
+
+XMLDeclaration* XMLElement::InsertNewDeclaration(const char* text)
+{
+    XMLDeclaration* node = _document->NewDeclaration(text);
+    return InsertEndChild(node) ? node : 0;
+}
+
+XMLUnknown* XMLElement::InsertNewUnknown(const char* text)
+{
+    XMLUnknown* node = _document->NewUnknown(text);
+    return InsertEndChild(node) ? node : 0;
+}
+
+
 
 //
 //	<ele></ele>
@@ -2115,7 +2154,7 @@ XMLDocument::~XMLDocument()
 }
 
 
-void XMLDocument::MarkInUse(XMLNode* node)
+void XMLDocument::MarkInUse(const XMLNode* const node)
 {
 	TIXMLASSERT(node);
 	TIXMLASSERT(node->_parent == 0);
@@ -2650,8 +2689,6 @@ void XMLPrinter::OpenElement( const char* name, bool compactMode )
 
     if ( _textDepth < 0 && !_firstElement && !compactMode ) {
         Putc( '\n' );
-    }
-    if ( !compactMode ) {
         PrintSpace( _depth );
     }
 

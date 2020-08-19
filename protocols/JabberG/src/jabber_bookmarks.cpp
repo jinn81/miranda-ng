@@ -146,7 +146,7 @@ static INT_PTR CALLBACK JabberAddBookmarkDlgProc(HWND hwndDlg, UINT msg, WPARAM 
 		}
 		break;
 
-	case WM_JABBER_CHECK_ONLINE:
+	case WM_PROTO_CHECK_ONLINE:
 		if (!param->ppro->m_bJabberOnline)
 			EndDialog(hwndDlg, 0);
 		break;
@@ -178,7 +178,8 @@ public:
 	{
 		SetMinSize(451, 320);
 
-		m_lvBookmarks.OnItemActivate = Callback(this, &CJabberDlgBookmarks::lvBookmarks_OnDoubleClick);
+		m_lvBookmarks.OnDoubleClick = Callback(this, &CJabberDlgBookmarks::lvBookmarks_OnDoubleClick);
+
 		m_btnAdd.OnClick = Callback(this, &CJabberDlgBookmarks::btnAdd_OnClick);
 		m_btnEdit.OnClick = Callback(this, &CJabberDlgBookmarks::btnEdit_OnClick);
 		m_btnRemove.OnClick = Callback(this, &CJabberDlgBookmarks::btnRemove_OnClick);
@@ -212,7 +213,7 @@ public:
 		return true;
 	}
 
-	bool OnClose() override
+	void OnDestroy() override
 	{
 		LVCOLUMN lvc = { 0 };
 		lvc.mask = LVCF_WIDTH;
@@ -225,28 +226,7 @@ public:
 
 		Utils_SaveWindowPosition(m_hwnd, 0, m_proto->m_szModuleName, "bookmarksWnd_");
 
-		return CSuper::OnClose();
-	}
-
-	void OnDestroy() override
-	{
 		m_proto->m_pDlgBookmarks = nullptr;
-		CSuper::OnDestroy();
-	}
-
-	INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam) override
-	{
-		switch (msg) {
-		case WM_COMMAND:
-			switch (LOWORD(wParam)) {
-			case IDOK:
-				OpenBookmark();
-				return TRUE;
-			}
-			break;
-		}
-
-		return CSuper::DlgProc(msg, wParam, lParam);
 	}
 
 	int Resizer(UTILRESIZECONTROL *urc) override
@@ -343,6 +323,8 @@ public:
 		{
 			if (item = m_proto->ListGetItemPtrFromIndex(i)) {
 				int itemType = mir_strcmpi(item->type, "conference") ? 1 : 0;
+				m_proto->debugLogA("BOOKMARK #%d: %d %s", i, itemType, item->jid);
+
 				int iItem = m_lvBookmarks.AddItem(item->name, itemType, (LPARAM)item->jid, itemType);
 				m_lvBookmarks.SetItem(iItem, 1, Utf2T(item->jid));
 				if (itemType == 0)
@@ -385,14 +367,20 @@ public:
 		if (!mir_strcmpi(item->type, "conference")) {
 			m_lvBookmarks.SetItemState(iItem, 0, LVIS_SELECTED); // Unselect the item
 
-																				  /* some hack for using bookmark to transport not under XEP-0048 */
+			// some hack for using bookmark to transport not under XEP-0048
 			if (!strchr(item->jid, '@'))
 				//the room name is not provided let consider that it is transport and send request to registration
 				m_proto->RegisterAgent(nullptr, item->jid);
 			else {
+				if (auto *pRoom = m_proto->ListGetItemPtr(LIST_CHATROOM, item->jid))
+					if (pRoom->hContact != 0) {
+						Clist_ContactDoubleClicked(pRoom->hContact);
+						return;
+					}
+
 				char *room = NEWSTR_ALLOCA(item->jid);
 				char *server = strchr(room, '@');
-				*(server++) = 0;
+				*server++ = 0;
 
 				if (item->nick && *item->nick)
 					m_proto->GroupchatJoinRoom(server, room, item->nick, item->password);

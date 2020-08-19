@@ -3,11 +3,11 @@
 
 struct CToxProto : public PROTO<CToxProto>
 {
-	friend CToxEnterPasswordDlg;
-	friend CToxCreatePasswordDlg;
-	friend CToxChangePasswordDlg;
-	friend CToxOptionsMain;
-	friend CToxOptionsNodeList;
+	friend class CToxEnterPasswordDlg;
+	friend class CToxCreatePasswordDlg;
+	friend class CToxChangePasswordDlg;
+	friend class CToxOptionsMain;
+	friend class CToxOptionsNodeList;
 
 public:
 	//////////////////////////////////////////////////////////////////////////////////////
@@ -19,30 +19,30 @@ public:
 	//////////////////////////////////////////////////////////////////////////////////////
 	// Virtual functions
 
-	MCONTACT AddToList(int flags, PROTOSEARCHRESULT* psr) override;
+	MCONTACT AddToList(int flags, PROTOSEARCHRESULT *psr) override;
 
 	int      Authorize(MEVENT hDbEvent) override;
-	int      AuthRecv(MCONTACT hContact, PROTORECVEVENT*) override;
-	int      AuthRequest(MCONTACT hContact, const wchar_t* szMessage) override;
+	int      AuthRecv(MCONTACT hContact, PROTORECVEVENT *) override;
+	int      AuthRequest(MCONTACT hContact, const wchar_t *szMessage) override;
 
-	HANDLE   FileAllow(MCONTACT hContact, HANDLE hTransfer, const wchar_t* tszPath) override;
+	HANDLE   FileAllow(MCONTACT hContact, HANDLE hTransfer, const wchar_t *tszPath) override;
 	int      FileCancel(MCONTACT hContact, HANDLE hTransfer) override;
-	int      FileDeny(MCONTACT hContact, HANDLE hTransfer, const wchar_t* tszReason) override;
-	int      FileResume(HANDLE hTransfer, int* action, const wchar_t** tszFilename) override;
+	int      FileDeny(MCONTACT hContact, HANDLE hTransfer, const wchar_t *tszReason) override;
+	int      FileResume(HANDLE hTransfer, int action, const wchar_t *tszFilename) override;
 
 	INT_PTR  GetCaps(int type, MCONTACT hContact = NULL) override;
-	
+
 	HWND     SearchAdvanced(HWND owner) override;
 	HWND     CreateExtendedSearchUI(HWND owner) override;
 
-	int      SendMsg(MCONTACT hContact, int flags, const char* msg) override;
+	int      SendMsg(MCONTACT hContact, int flags, const char *msg) override;
 
-	HANDLE   SendFile(MCONTACT hContact, const wchar_t*, wchar_t **ppszFiles) override;
+	HANDLE   SendFile(MCONTACT hContact, const wchar_t *, wchar_t **ppszFiles) override;
 
 	int      SetStatus(int iNewStatus) override;
 
 	HANDLE   GetAwayMsg(MCONTACT hContact) override;
-	int      SetAwayMsg(int iStatus, const wchar_t* msg) override;
+	int      SetAwayMsg(int iStatus, const wchar_t *msg) override;
 
 	int      UserIsTyping(MCONTACT hContact, int type) override;
 
@@ -167,7 +167,6 @@ private:
 
 	// contacts search
 	void __cdecl SearchByNameAsync(void *arg);
-	void __cdecl SearchFailedAsync(void *arg);
 
 	static INT_PTR CALLBACK SearchDlgProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
@@ -196,7 +195,7 @@ private:
 
 	// transfer
 	HANDLE OnFileAllow(Tox *tox, MCONTACT hContact, HANDLE hTransfer, const wchar_t *tszPath);
-	int OnFileResume(Tox *tox, HANDLE hTransfer, int *action, const wchar_t **szFilename);
+	int OnFileResume(Tox *tox, HANDLE hTransfer, int action, const wchar_t *szFilename);
 	HANDLE OnSendFile(Tox *tox, MCONTACT hContact, const wchar_t*, wchar_t **ppszFiles);
 
 	int CancelTransfer(MCONTACT hContact, HANDLE hTransfer);

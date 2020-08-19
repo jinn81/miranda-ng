@@ -52,18 +52,17 @@ void CIcqProto::ProcessBuddyList(const JSONNode &ev)
 
 			setWString(hContact, "IcqGroup", pGroup->wszName);
 
+			if (!bCreated) {
+				Clist_GroupCreate(0, pGroup->wszName);
+				bCreated = true;
+			}
+
 			ptrW mirGroup(Clist_GetGroup(hContact));
 			if (mir_wstrcmp(mirGroup, pGroup->wszName))
 				bEnableMenu = true;
 
-			if (!mirGroup) {
-				if (!bCreated) {
-					Clist_GroupCreate(0, pGroup->wszName);
-					bCreated = true;
-				}
-
+			if (!mirGroup)
 				Clist_SetGroup(hContact, pGroup->wszName);
-			}
 		}
 	}
 
@@ -115,15 +114,14 @@ void CIcqProto::ProcessDiff(const JSONNode &ev)
 
 				setWString(hContact, "IcqGroup", pGroup->wszName);
 
-				ptrW wszGroup(Clist_GetGroup(hContact));
-				if (!wszGroup) {
-					if (!bCreated) {
-						Clist_GroupCreate(0, pGroup->wszName);
-						bCreated = true;
-					}
-
-					Clist_SetGroup(hContact, pGroup->wszName);
+				if (!bCreated) {
+					Clist_GroupCreate(0, pGroup->wszName);
+					bCreated = true;
 				}
+
+				ptrW wszGroup(Clist_GetGroup(hContact));
+				if (!wszGroup)
+					Clist_SetGroup(hContact, pGroup->wszName);
 			}
 
 			if (bDeleted)
@@ -165,8 +163,11 @@ void CIcqProto::ProcessEvent(const JSONNode &ev)
 void CIcqProto::ProcessHistData(const JSONNode &ev)
 {
 	MCONTACT hContact;
+	bool bVeryBeginning = m_bFirstBos;
 
 	CMStringW wszId(ev["sn"].as_mstring());
+	auto *pCache = FindContactByUIN(wszId); // might be NULL for groupchats
+
 	if (IsChat(wszId)) {
 		SESSION_INFO *si = g_chatApi.SM_FindSession(wszId, m_szModuleName);
 		if (si == nullptr)
@@ -189,7 +190,15 @@ void CIcqProto::ProcessHistData(const JSONNode &ev)
 			else LoadChatInfo(si);
 		}
 	}
-	else hContact = CreateContact(wszId, true);
+	else {
+		hContact = CreateContact(wszId, true);
+
+		// for temporary contacts that just gonna be created
+		if (pCache == nullptr) {
+			bVeryBeginning = true;
+			pCache = FindContactByUIN(wszId);
+		}
+	}
 
 	// restore reading from the previous point, if we just installed Miranda
 	__int64 lastMsgId = getId(hContact, DB_KEY_LASTMSGID);
@@ -198,16 +207,39 @@ void CIcqProto::ProcessHistData(const JSONNode &ev)
 		setId(hContact, DB_KEY_LASTMSGID, lastMsgId);
 	}
 
+	__int64 patchVersion = _wtoi64(ev["patchVersion"].as_mstring());
+	setId(hContact, DB_KEY_PATCHVER, patchVersion);
+
+	__int64 srvLastId = _wtoi64(ev["lastMsgId"].as_mstring());
+
 	// we load history in the very beginning or if the previous message 
-	if (m_bFirstBos) {
-		__int64 srvLastId = _wtoi64(ev["lastMsgId"].as_mstring());
-		if (srvLastId > lastMsgId)
-			RetrieveUserHistory(hContact, lastMsgId);
+	if (bVeryBeginning) {
+		if (pCache) {
+			debugLogA("Setting cache = %lld for %d", srvLastId, hContact);
+			pCache->m_iProcessedMsgId = srvLastId;
+		}
+
+		if (srvLastId > lastMsgId) {
+			debugLogA("We need to retrieve history for %S: %lld > %lld", wszId.c_str(), srvLastId, lastMsgId);
+			RetrieveUserHistory(hContact, lastMsgId, false);
+		}
 	}
 	else {
-		for (auto &it : ev["tail"]["messages"])
-			ParseMessage(hContact, lastMsgId, it, true);
-		setId(hContact, DB_KEY_LASTMSGID, lastMsgId);
+		if (!(pCache && pCache->m_iProcessedMsgId >= srvLastId)) {
+			if (pCache)
+				debugLogA("Proceeding with cache for %d: %lld < %lld", hContact, pCache->m_iProcessedMsgId, srvLastId);
+			else
+				debugLogA("Proceeding with empty cache for %d", hContact);
+
+			for (auto &it : ev["tail"]["messages"])
+				ParseMessage(hContact, lastMsgId, it, false, true);
+
+			setId(hContact, DB_KEY_LASTMSGID, lastMsgId);
+			if (pCache) {
+				pCache->m_iProcessedMsgId = lastMsgId;
+				debugLogA("Setting second cache = %lld for %d", srvLastId, hContact);
+			}
+		}
 	}
 
 	// check remote read
@@ -217,8 +249,8 @@ void CIcqProto::ProcessHistData(const JSONNode &ev)
 		if (srvRemoteRead > lastRemoteRead) {
 			setId(hContact, DB_KEY_REMOTEREAD, srvRemoteRead);
 
-			MessageReadData data(time(0), MRD_TYPE_READTIME);
-			CallService(MS_MESSAGESTATE_UPDATE, hContact, (LPARAM)&data);
+			if (g_bMessageState)
+				CallService(MS_MESSAGESTATE_UPDATE, hContact, MRD_TYPE_READ);
 		}
 	}
 }
@@ -255,6 +287,7 @@ void CIcqProto::ProcessNotification(const JSONNode &ev)
 			CMStringW wszFrom((*root)["from"].as_mstring());
 			CMStringW wszSubj((*root)["subject"].as_mstring());
 			m_unreadEmails = (*root)["unreadCount"].as_int();
+			debugLogW(L"You received e-mail (%d) from <%s>: <%s>", m_unreadEmails, wszFrom.c_str(), wszSubj.c_str());
 
 			CMStringW wszMessage(FORMAT, TranslateT("You received e-mail from %s: %s"), wszFrom.c_str(), wszSubj.c_str());
 			EmailNotification(wszMessage);
@@ -310,7 +343,7 @@ void CIcqProto::ProcessPresence(const JSONNode &ev)
 	}
 }
 
-void CIcqProto::ProcessSessionEnd(const JSONNode&)
+void CIcqProto::ProcessSessionEnd(const JSONNode &/*ev*/)
 {
 	m_szRToken.Empty();
 	m_iRClientId = 0;
@@ -328,7 +361,7 @@ void CIcqProto::ProcessTyping(const JSONNode &ev)
 	if (pCache) {
 		if (wszStatus == "typing")
 			CallService(MS_PROTO_CONTACTISTYPING, pCache->m_hContact, 60);
-		else 
+		else
 			CallService(MS_PROTO_CONTACTISTYPING, pCache->m_hContact, PROTOTYPE_CONTACTTYPING_OFF);
 	}
 }
@@ -363,7 +396,7 @@ void __cdecl CIcqProto::PollThread(void*)
 		auto *pReq = new AsyncHttpRequest(CONN_FETCH, REQUEST_GET, szUrl, &CIcqProto::OnFetchEvents);
 		if (!m_bFirstBos)
 			pReq->timeout = 62000;
-		
+
 		if (!ExecuteRequest(pReq)) {
 			ShutdownSession();
 			break;
@@ -373,5 +406,4 @@ void __cdecl CIcqProto::PollThread(void*)
 	}
 
 	debugLogA("Polling thread ended");
-	m_hPollThread = nullptr;
 }

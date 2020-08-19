@@ -55,6 +55,13 @@ CSametimeProto::CSametimeProto(const char* pszProtoName, const wchar_t* tszUserN
 
 	LoadOptions();
 
+	// register with chat module
+	GCREGISTER gcr = {};
+	gcr.pszModule = m_szModuleName;
+	gcr.ptszDispName = m_tszUserName;
+	gcr.iMaxText = MAX_MESSAGE_SIZE;
+	Chat_Register(&gcr);
+
 	debugLogW(L"CSametimeProto::CSametimeProto() end");
 }
 
@@ -112,7 +119,7 @@ INT_PTR CSametimeProto::GetCaps(int type, MCONTACT)
 	case PFLAGNUM_4:
 		return PF4_SUPPORTTYPING;
 	case PFLAG_UNIQUEIDTEXT:
-		return (INT_PTR)Translate("ID");
+		return (INT_PTR)TranslateT("ID");
 	case PFLAG_MAXLENOFMESSAGE:
 		return MAX_MESSAGE_SIZE;
 	default:
@@ -131,14 +138,7 @@ int CSametimeProto::GetInfo(MCONTACT hContact, int infoType)
 	if (!session)
 		return 1;
 
-	///TODO unimplemented - getting contact info
-
-	TFakeAckParams* tfap = (TFakeAckParams*)mir_alloc(sizeof(TFakeAckParams));
-	tfap->proto = this;
-	tfap->hContact = hContact;
-	tfap->lParam = NULL;
-	mir_forkThread<TFakeAckParams>(sttFakeAckInfoSuccessThread, tfap);
-
+	ProtoBroadcastAck(hContact, ACKTYPE_GETINFO, ACKRESULT_SUCCESS, 0);
 	return 0;
 }
 
@@ -205,11 +205,7 @@ int CSametimeProto::SendMsg(MCONTACT hContact, int, const char* msg)
 
 	char *proto = Proto_GetBaseAccountName(hContact);
 	if (!proto || mir_strcmp(proto, m_szModuleName) != 0 || db_get_w(hContact, m_szModuleName, "Status", ID_STATUS_OFFLINE) == ID_STATUS_OFFLINE) {
-		TFakeAckParams* tfap = (TFakeAckParams*)mir_alloc(sizeof(TFakeAckParams));
-		tfap->proto = this;
-		tfap->hContact = hContact;
-		tfap->lParam = 0;
-		mir_forkThread<TFakeAckParams>(sttFakeAckMessageFailedThread, tfap);
+		ProtoBroadcastAck(hContact, ACKTYPE_MESSAGE, ACKRESULT_SUCCESS, 0);
 		return 0;
 	}
 
@@ -217,13 +213,7 @@ int CSametimeProto::SendMsg(MCONTACT hContact, int, const char* msg)
 		return 0;
 
 	int ret = (INT_PTR)SendMessageToUser(hContact, msg);
-
-	TFakeAckParams *tfap = (TFakeAckParams*)mir_alloc(sizeof(TFakeAckParams));
-	tfap->proto = this;
-	tfap->hContact = hContact;
-	tfap->lParam = (LPARAM)ret;
-	mir_forkThread<TFakeAckParams>(sttFakeAckMessageSuccessThread, tfap);
-
+	ProtoBroadcastAck(hContact, ACKTYPE_MESSAGE, ACKRESULT_SUCCESS, (HANDLE)ret);
 	return ret;
 }
 

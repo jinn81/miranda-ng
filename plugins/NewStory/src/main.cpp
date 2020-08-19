@@ -13,6 +13,9 @@
 
 CMPlugin g_plugin;
 
+CMOption<bool> g_bOptGrouping(MODULENAME, "MessageGrouping", false);
+CMOption<bool> g_bOptDrawEdge(MODULENAME, "DrawEdge", true);
+
 /////////////////////////////////////////////////////////////////////////////////////////
 
 PLUGININFOEX pluginInfoEx =
@@ -30,7 +33,8 @@ PLUGININFOEX pluginInfoEx =
 };
 
 CMPlugin::CMPlugin() :
-	PLUGIN<CMPlugin>(MODULENAME, pluginInfoEx)
+	PLUGIN<CMPlugin>(MODULENAME, pluginInfoEx),
+	bOptVScroll(MODULENAME, "VScroll", true)
 {
 }
 
@@ -42,72 +46,69 @@ extern "C" __declspec(dllexport) const MUUID MirandaInterfaces[] = { MIID_UIHIST
 
 static IconItem icons[] =
 {
-	{ LPGEN("Main Icon"),         "main",      ICO_NEWSTORY   },
-	{ LPGEN("User Info"),         "userinfo",  ICO_USERINFO   },
-	{ LPGEN("User Menu"),         "usermenu",  ICO_USERMENU   },
+	{ LPGEN("Main icon"),         "main",      ICO_NEWSTORY   },
+	{ LPGEN("User info"),         "userinfo",  ICO_USERINFO   },
+	{ LPGEN("User menu"),         "usermenu",  ICO_USERMENU   },
 	{ LPGEN("Search"),            "search",    ICO_SEARCH     },
 	{ LPGEN("Options"),           "options",   ICO_OPTIONS    },
 	{ LPGEN("Filter"),            "filter",    ICO_FILTER     },
 	{ LPGEN("Export"),            "export",    ICO_EXPORT     },
 	{ LPGEN("Copy"),              "copy",      ICO_COPY       },
-	{ LPGEN("Send Message"),      "message",   ICO_SENDMSG    },
-	{ LPGEN("Close"),             "close",     ICO_CLOSE      },
+	{ LPGEN("Send message"),      "message",   ICO_SENDMSG    },
 
-	{ LPGEN("Incoming Message"),  "msgin",     ICO_MSGIN      },
-	{ LPGEN("Outgoing Message"),  "msgout",    ICO_MSGOUT     },
-	{ LPGEN("User Signed In"),    "signin",    ICO_SIGNIN     },
-	{ LPGEN("File"),              "file",      ICO_FILE       },
-	{ LPGEN("URL"),               "url",       ICO_URL        },
-	{ LPGEN("Unknown Event"),     "unknown",   ICO_UNKNOWN    },
+	{ LPGEN("Incoming message"),  "msgin",     ICO_MSGIN      },
+	{ LPGEN("Outgoing message"),  "msgout",    ICO_MSGOUT     },
+	{ LPGEN("User signed in"),    "signin",    ICO_SIGNIN     },
+	{ LPGEN("Unknown event"),     "unknown",   ICO_UNKNOWN    },
 
-	{ LPGEN("Find Previous"),     "findprev",  ICO_FINDPREV   },
-	{ LPGEN("Find Next"),         "findnext",  ICO_FINDNEXT   },
-	{ LPGEN("Jump to Date"),      "calendar",  ICO_CALENDAR   },
+	{ LPGEN("Find previous"),     "findprev",  ICO_FINDPREV   },
+	{ LPGEN("Find next"),         "findnext",  ICO_FINDNEXT   },
+	{ LPGEN("Jump to date"),      "calendar",  ICO_CALENDAR   },
+	{ LPGEN("Conversations"),     "timetree",  ICO_TIMETREE   },
 
-	{ LPGEN("Template Group"),    "tplgroup",  ICO_TPLGROUP   },
-	{ LPGEN("Reset"),             "reset",     ICO_RESET      },
-	{ LPGEN("Update Preview"),    "preview",   ICO_PREVIEW    },
+	{ LPGEN("Template group"),    "tplgroup",  ICO_TPLGROUP   },
+	{ LPGEN("Cancel edit"),       "reset",     ICO_RESET      },
+	{ LPGEN("Update preview"),    "preview",   ICO_PREVIEW    },
 	{ LPGEN("Help"),              "varhelp",   ICO_VARHELP    }
 };
 
-int evtModulesLoaded(WPARAM, LPARAM)
+static int evtModulesLoaded(WPARAM, LPARAM)
 {
 	InitFonts();
 	InitNewstoryControl();
 	InitHistory();
-	InitOptions();
+	InitMenus();
+
 	LoadTemplates();
+	return 0;
+}
 
-	CMenuItem mi(&g_plugin);
-	mi.flags = CMIF_UNICODE;
-
-	mi.pszService = MS_HISTORY_SHOWCONTACTHISTORY;
-	mi.name.w = L"User Newstory";
-	mi.position = 1999990000;
-	mi.hIcon = g_plugin.getIcon(ICO_NEWSTORY);
-	Menu_AddContactMenuItem(&mi);
-
-	mi.pszService = "Newstory/System";
-	mi.name.w = L"System Newstory";
-	mi.position = 1999990000;
-	mi.hIcon = g_plugin.getIcon(ICO_NEWSTORY);
-	Menu_AddMainMenuItem(&mi);
+static int evtPreShutdown(WPARAM, LPARAM)
+{
+	WindowList_Broadcast(hNewstoryWindows, WM_CLOSE, 0, 0);
 	return 0;
 }
 
 int CMPlugin::Load()
 {
-	g_plugin.registerIcon(MODULETITLE, icons);
+	registerIcon(MODULETITLE, icons);
 
-	CreateServiceFunction(MS_HISTORY_SHOWCONTACTHISTORY, svcShowNewstory);
-	CreateServiceFunction("Newstory/System", svcShowSystemNewstory);
+	bDrawEdge = g_bOptDrawEdge;
+	bMsgGrouping = g_bOptGrouping;
 
+	m_log = RegisterSrmmLog(MODULETITLE, _T(MODULENAME), NewStory_Stub);
+
+	HookEvent(ME_OPT_INITIALISE, OptionsInitialize);
 	HookEvent(ME_SYSTEM_MODULESLOADED, evtModulesLoaded);
+	HookEvent(ME_SYSTEM_PRESHUTDOWN, evtPreShutdown);
 	return 0;
 }
 
 int CMPlugin::Unload()
 {
-	FreeHistory();
+	UnregisterSrmmLog(m_log);
+	UnregisterClass(_T(NEWSTORYLIST_CLASS), g_plugin.getInst());
+	DestroyFonts();
+
 	return 0;
 }

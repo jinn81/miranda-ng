@@ -69,8 +69,7 @@ INT_PTR CSametimeProto::SametimeLoadIcon(WPARAM wParam, LPARAM lParam)
 						GetSystemMetrics(wParam & PLIF_SMALL ? SM_CYSMICON : SM_CYICON), 0);
 }
 
-
-//icolib stuff
+// icolib stuff
 static IconItem iconList[] =
 {
 	{ LPGEN("Protocol icon"), "protoicon", IDI_ICON_PROTO, 0 },
@@ -87,43 +86,8 @@ void SametimeInitIcons(void)
 }
 
 // Copied from MSN plugin - sent acks need to be from different thread
-void __cdecl sttFakeAckInfoSuccessThread(TFakeAckParams* tParam)
-{
-	CSametimeProto* proto = tParam->proto;
-	proto->debugLogW(L"sttFakeAckInfoSuccessThread() start");
 
-	Sleep(100);
-	proto->ProtoBroadcastAck(tParam->hContact, ACKTYPE_GETINFO, ACKRESULT_SUCCESS, (HANDLE)1);
-
-	proto->debugLogW(L"sttFakeAckInfoSuccessThread() end");
-	mir_free(tParam);
-}
-
-void __cdecl sttFakeAckMessageSuccessThread(TFakeAckParams* tParam)
-{
-	CSametimeProto* proto = tParam->proto;
-	proto->debugLogW(L"sttFakeAckMessageSuccessThread() start");
-
-	Sleep(100);
-	proto->ProtoBroadcastAck(tParam->hContact, ACKTYPE_MESSAGE, ACKRESULT_SUCCESS, (HANDLE)tParam->lParam, 0);
-
-	proto->debugLogW(L"sttFakeAckMessageSuccessThread() end");
-	mir_free(tParam);
-}
-
-void __cdecl sttFakeAckMessageFailedThread(TFakeAckParams* tParam)
-{
-	CSametimeProto* proto = tParam->proto;
-	proto->debugLogW(L"sttFakeAckMessageFailedThread() start");
-
-	Sleep(100);
-	proto->ProtoBroadcastAck(tParam->hContact, ACKTYPE_MESSAGE, ACKRESULT_FAILED, nullptr, tParam->lParam); ///TODO tParam->lParam: add error message
-
-	proto->debugLogW(L"sttFakeAckMessageFailedThread() end");
-	mir_free(tParam);
-}
-
-void __cdecl sttRecvAwayThread(TFakeAckParams* tParam)
+void __cdecl sttRecvAwayThread(TFakeAckParams *tParam)
 {
 	CSametimeProto* proto = tParam->proto;
 	proto->debugLogW(L"sttRecvAwayThread() start");
@@ -156,16 +120,6 @@ int CSametimeProto::OnIdleChanged(WPARAM, LPARAM lParam)
 	}
 
 	return 0;
-}
-
-void CSametimeProto::OnModulesLoaded()
-{
-	// register with chat module
-	GCREGISTER gcr = {};
-	gcr.pszModule = m_szModuleName;
-	gcr.ptszDispName = m_tszUserName;
-	gcr.iMaxText = MAX_MESSAGE_SIZE;
-	Chat_Register(&gcr);
 }
 
 void CSametimeProto::OnShutdown()

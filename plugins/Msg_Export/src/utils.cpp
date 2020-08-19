@@ -714,7 +714,7 @@ static bool ExportDBEventInfo(MCONTACT hContact, HANDLE hFile, wstring sFilePath
 
 				int age = db_get_w(hContact, szProto, "Age", 0);
 				if (age != 0)
-					pInfo.push_back(JSONNode("gender", age));
+					pInfo.push_back(JSONNode("age", age));
 
 				for (auto &it : pSettings) {
 					wstring szValue = _DBGetStringW(hContact, szProto, it, L"");
@@ -744,11 +744,11 @@ static bool ExportDBEventInfo(MCONTACT hContact, HANDLE hFile, wstring sFilePath
 				// This is written this way because I expect this will become a string the user may set 
 				// in the options dialog.
 				output.AppendFormat(L"%-10s: %s\r\n", TranslateT("User"), sRemoteUser.c_str());
-				output.AppendFormat(L"%-10s: %S\r\n", TranslateT("Protocol"), szProto);
+				output.AppendFormat(L"%-10s: %S\r\n", TranslateT("Account"), szProto);
 
 				ptrW id(Contact_GetInfo(CNF_UNIQUEID, hContact, szProto));
 				if (id != NULL)
-					output.AppendFormat(L"%-10s: %s\r\n", TranslateT("UIN"), id.get());
+					output.AppendFormat(L"%-10s: %s\r\n", TranslateT("User ID"), id.get());
 
 				szTemp[0] = (wchar_t)db_get_b(hContact, szProto, "Gender", 0);
 				if (szTemp[0]) {

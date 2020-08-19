@@ -216,20 +216,20 @@ extern NEN_OPTIONS nen_options;
 extern CSkinItem SkinItems[];
 extern TContainerData *pFirstContainer, *pLastActiveContainer;
 extern ButtonSet g_ButtonSet;
-extern HANDLE g_hEvent;
 extern RECT rcLastStatusBarClick;
-extern TTemplateSet RTL_Active, LTR_Active;
-extern LOGFONTA logfonts[MSGDLGFONTCOUNT + 2];
+extern TTemplateSet RTL_Active, LTR_Active, LTR_Default, RTL_Default;
+extern LOGFONTW logfonts[MSGDLGFONTCOUNT + 2];
 extern COLORREF fontcolors[MSGDLGFONTCOUNT + 2];
 extern HINSTANCE hinstance;
 extern BOOL g_bIMGtagButton;
-extern char *TemplateNames[];
+extern char* TemplateNames[TMPL_MAX];
 extern HANDLE hUserPrefsWindowList;
 extern TCpTable cpTable[];
 
 extern pfnDoPopup oldDoPopup, oldLogToFile;
 extern pfnDoTrayIcon oldDoTrayIcon;
 
+void LoadDefaultTemplates();
 int  LoadSendRecvMessageModule(void);
 int  SplitmsgShutdown(void);
 int  Chat_Load(), Chat_Unload();

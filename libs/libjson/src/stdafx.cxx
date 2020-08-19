@@ -32,6 +32,13 @@ LIBJSON_DLL(JSONNode&) operator<<(JSONNode &json, const INT64_PARAM &param)
 	return json;
 }
 
+LIBJSON_DLL(JSONNode&) operator<<(JSONNode &json, const SINT64_PARAM &param)
+{
+	char str[40];
+	_i64toa(param.iValue, str, 10);
+	return json << CHAR_PARAM(param.szName, str);
+}
+
 LIBJSON_DLL(JSONNode&) operator<<(JSONNode &json, const BOOL_PARAM &param)
 {
 	json.push_back(JSONNode(param.szName, param.bValue));
@@ -40,7 +47,11 @@ LIBJSON_DLL(JSONNode&) operator<<(JSONNode &json, const BOOL_PARAM &param)
 
 LIBJSON_DLL(JSONNode&) operator<<(JSONNode &json, const CHAR_PARAM &param)
 {
-	json.push_back(JSONNode(param.szName, param.szValue));
+	if (param.szValue == nullptr) {
+		JSONNode tmp(JSON_NULL); tmp.set_name(param.szName);
+		json.push_back(tmp);
+	}
+	else json.push_back(JSONNode(param.szName, param.szValue));
 	return json;
 }
 

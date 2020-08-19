@@ -62,6 +62,7 @@
 #include <m_options.h>
 #include <m_popup.h>
 #include <m_skin.h>
+#include <m_smileyadd.h>
 #include <m_system.h>
 #include <m_timezones.h>
 #include <m_userinfo.h>
@@ -89,6 +90,7 @@
 #define DB_KEY_PHONEREG "PhoneReg"
 #define DB_KEY_LASTSEEN "LastSeen"
 #define DB_KEY_ONLINETS "OnlineTS"
+#define DB_KEY_PATCHVER "PatchVersion"
 #define DB_KEY_RCLIENTID "RClientID"
 #define DB_KEY_LASTMSGID "LastMsgId"
 #define DB_KEY_REMOTEREAD "RemoteReadId"

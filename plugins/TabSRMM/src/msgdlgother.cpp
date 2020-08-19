@@ -45,12 +45,11 @@ void CMsgDialog::AddLog()
 {
 	if (PluginConfig.m_bUseDividers) {
 		if (PluginConfig.m_bDividersUsePopupConfig) {
-			if (!MessageWindowOpened(0, m_hwnd))
+			if (!MessageWindowOpened(0, this))
 				DM_AddDivider();
 		}
 		else {
-			bool bInactive = !IsActive();
-			if (bInactive)
+			if (!IsActive())
 				DM_AddDivider();
 			else if (m_pContainer->m_hwndActive != m_hwnd)
 				DM_AddDivider();
@@ -150,7 +149,7 @@ void CMsgDialog::CloseTab()
 		m_pContainer->m_hwndActive = GetTabWindow(m_hwndParent, i);
 
 		RECT rc;
-		SendMessage(m_pContainer->m_hwnd, DM_QUERYCLIENTAREA, 0, (LPARAM)& rc);
+		m_pContainer->QueryClientArea(rc);
 		SetWindowPos(m_pContainer->m_hwndActive, HWND_TOP, rc.left, rc.top, (rc.right - rc.left), (rc.bottom - rc.top), SWP_SHOWWINDOW);
 		ShowWindow(m_pContainer->m_hwndActive, SW_SHOW);
 		SetForegroundWindow(m_pContainer->m_hwndActive);
@@ -236,7 +235,7 @@ BOOL CMsgDialog::DoRtfToTags(CMStringW &pszText) const
 		return FALSE;
 
 	// used to filter out attributes which are already set for the default message input area font
-	LOGFONTA lf = m_pContainer->m_theme.logFonts[MSGFONTID_MESSAGEAREA];
+	auto &lf = m_pContainer->m_theme.logFonts[MSGFONTID_MESSAGEAREA];
 
 	// create an index of colors in the module and map them to
 	// corresponding colors in the RTF color table
@@ -525,10 +524,9 @@ void CMsgDialog::FlashOnClist(MEVENT hEvent, DBEVENTINFO *dbei)
 
 	if ((GetForegroundWindow() != m_pContainer->m_hwnd || m_pContainer->m_hwndActive != m_hwnd) && !(dbei->flags & DBEF_SENT) && dbei->eventType == EVENTTYPE_MESSAGE) {
 		m_dwUnread++;
-		UpdateTrayMenu(this, (WORD)(m_cache->getActiveStatus()), m_cache->getActiveProto(), m_wszStatus, m_hContact, 0);
-		if (nen_options.bTraySupport)
-			return;
+		AddUnreadContact(m_hContact);
 	}
+
 	if (hEvent == 0)
 		return;
 
@@ -695,8 +693,8 @@ void CMsgDialog::GetMyNick()
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
-// retrieve both buddys and my own UIN for a message session and store them in the message window *dat
-// respects metacontacts and uses the current protocol if the contact is a MC
+// retrieve both buddys and my own UIN for a message session and store them in the message 
+// window *dat respects metacontacts and uses the current protocol if the contact is a MC
 
 void CMsgDialog::GetMYUIN()
 {
@@ -705,6 +703,14 @@ void CMsgDialog::GetMYUIN()
 		wcsncpy_s(m_myUin, uid, _TRUNCATE);
 	else
 		m_myUin[0] = 0;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+// returns the status of Send button
+
+LRESULT CMsgDialog::GetSendButtonState()
+{
+	return m_btnOk.SendMsg(BUTTONGETSTATEID, TRUE, 0);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -827,7 +833,7 @@ void CMsgDialog::LoadOwnAvatar()
 void CMsgDialog::LoadSettings()
 {
 	m_clrInputBG = m_pContainer->m_theme.inputbg;
-	LoadLogfont(FONTSECTION_IM, MSGFONTID_MESSAGEAREA, nullptr, &m_clrInputFG, FONTMODULE);
+	LoadMsgDlgFont(FONTSECTION_IM, MSGFONTID_MESSAGEAREA, nullptr, &m_clrInputFG);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -852,6 +858,22 @@ void CMsgDialog::LoadSplitter()
 
 	if (m_iSplitterY < MINSPLITTERY)
 		m_iSplitterY = 150;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+
+void CMsgDialog::LogEvent(DBEVENTINFO &dbei)
+{
+	if (m_iLogMode != 0) {
+		dbei.flags |= DBEF_TEMPORARY;
+
+		MEVENT hDbEvent = db_event_add(m_hContact, &dbei);
+		if (hDbEvent) {
+			m_pLog->LogEvents(hDbEvent, 1, true);
+			db_event_delete(hDbEvent);
+		}
+	}
+	else LOG()->LogEvents(0, 1, true, &dbei);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -1075,11 +1097,10 @@ int CMsgDialog::MsgWindowMenuHandler(int selection, int menuId)
 	if (menuId == MENU_PICMENU || menuId == MENU_PANELPICMENU || menuId == MENU_TABCONTEXT) {
 		switch (selection) {
 		case ID_TABMENU_ATTACHTOCONTAINER:
-			CreateDialogParam(g_plugin.getInst(), MAKEINTRESOURCE(IDD_SELECTCONTAINER), m_hwnd, SelectContainerDlgProc, (LPARAM)m_hwnd);
+			SelectContainer();
 			return 1;
 		case ID_TABMENU_CONTAINEROPTIONS:
-			if (m_pContainer->m_hWndOptions == nullptr)
-				CreateDialogParam(g_plugin.getInst(), MAKEINTRESOURCE(IDD_CONTAINEROPTIONS), m_hwnd, DlgProcContainerOptions, (LPARAM)m_pContainer);
+			m_pContainer->OptionsDialog();
 			return 1;
 		case ID_TABMENU_CLOSECONTAINER:
 			SendMessage(m_pContainer->m_hwnd, WM_CLOSE, 0, 0);
@@ -1094,7 +1115,7 @@ int CMsgDialog::MsgWindowMenuHandler(int selection, int menuId)
 			db_unset(m_hContact, SRMSGMOD_T, "tabindex");
 			break;
 		case ID_TABMENU_LEAVECHATROOM:
-			if (isChat() && m_hContact != 0) {
+			if (isChat()) {
 				char *szProto = Proto_GetBaseAccountName(m_hContact);
 				if (szProto)
 					CallProtoService(szProto, PS_LEAVECHAT, m_hContact, 0);
@@ -1213,19 +1234,6 @@ void CMsgDialog::RemakeLog()
 	m_lastEventTime = 0;
 	m_iLastEventType = -1;
 	StreamEvents(m_hDbEventFirst, -1, 0);
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////
-
-void CMsgDialog::ReplayQueue()
-{
-	for (int i = 0; i < m_iNextQueuedEvent; i++)
-		if (m_hQueuedEvents[i] != 0)
-			StreamEvents(m_hQueuedEvents[i], 1, 1);
-
-	m_iNextQueuedEvent = 0;
-	SetDlgItemText(m_hwnd, IDC_LOGFROZENTEXT, m_bNotOnList ? TranslateT("Contact not on list. You may add it...") :
-		TranslateT("Auto scrolling is disabled (press F12 to enable it)"));
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -1407,19 +1415,15 @@ void CMsgDialog::SendHBitmapAsFile(HBITMAP hbmp) const
 	ii.pwszName = filename;
 	ii.dwMask = IMGI_HBITMAP;
 	ii.fif = FIF_JPEG;
-	Image_Save(&ii);
+	if (!Image_Save(&ii)) {
+		CWarning::show(CWarning::WARN_SAVEFILE, MB_OK | MB_ICONEXCLAMATION | CWarning::CWF_NOALLOWHIDE);
+		return;
+	}
 
-	int totalCount = 0;
-	wchar_t **ppFiles = nullptr;
-	Utils::AddToFileList(&ppFiles, &totalCount, filename);
+	vTempFilenames.insert(mir_wstrdup(filename));
 
-	wchar_t *_t = mir_wstrdup(filename);
-	vTempFilenames.insert(_t);
-
-	CallService(MS_FILE_SENDSPECIFICFILEST, m_cache->getActiveContact(), (LPARAM)ppFiles);
-
-	mir_free(ppFiles[0]);
-	mir_free(ppFiles);
+	wchar_t *ppFiles[2] = { filename, nullptr };
+	CallService(MS_FILE_SENDSPECIFICFILEST, m_cache->getActiveContact(), (LPARAM)&ppFiles);
 }
 
 // remove all temporary files created by the "send clipboard as file" feature.
@@ -1701,6 +1705,31 @@ void CMsgDialog::StreamEvents(MEVENT hDbEventFirst, int count, bool bAppend)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
+// sent by the select container dialog box when a container was selected...
+
+void CMsgDialog::SwitchToContainer(const wchar_t *szNewName)
+{
+	if (!mir_wstrcmp(szNewName, TranslateT("Default container")))
+		szNewName = CGlobals::m_default_container_name;
+
+	int iOldItems = TabCtrl_GetItemCount(m_hwndParent);
+	if (!wcsncmp(m_pContainer->m_wszName, szNewName, CONTAINER_NAMELEN))
+		return;
+
+	TContainerData *pNewContainer = FindContainerByName(szNewName);
+	if (pNewContainer == nullptr)
+		if ((pNewContainer = CreateContainer(szNewName, FALSE, m_hContact)) == nullptr)
+			return;
+
+	db_set_ws(m_hContact, SRMSGMOD_T, "containerW", szNewName);
+	PostMessage(PluginConfig.g_hwndHotkeyHandler, DM_DOCREATETAB, (WPARAM)pNewContainer, m_hContact);
+	if (iOldItems > 1)                // there were more than 1 tab, container is still valid
+		SendMessage(m_pContainer->m_hwndActive, WM_SIZE, 0, 0);
+	SetForegroundWindow(pNewContainer->m_hwnd);
+	SetActiveWindow(pNewContainer->m_hwnd);
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
 
 bool CMsgDialog::TabAutoComplete()
 {
@@ -1850,6 +1879,20 @@ void CMsgDialog::tabUpdateStatusBar() const
 	}
 }
 
+int CMsgDialog::Typing(int secs)
+{
+	if (m_si != nullptr && m_si->iType != GCW_PRIVMESS)
+		return 0;
+
+	int preTyping = m_nTypeSecs != 0;
+
+	m_nTypeSecs = (secs > 0) ? secs : 0;
+	if (m_nTypeSecs)
+		m_bShowTyping = 0;
+
+	return preTyping;
+}
+
 /////////////////////////////////////////////////////////////////////////////////////////
 
 void CMsgDialog::UpdateNickList()
@@ -1928,9 +1971,9 @@ void CMsgDialog::UpdateSaveAndSendButton()
 	gtxl.flags = GTL_DEFAULT | GTL_PRECISE | GTL_NUMBYTES;
 
 	int len = SendDlgItemMessage(m_hwnd, IDC_SRMM_MESSAGE, EM_GETTEXTLENGTHEX, (WPARAM)&gtxl, 0);
-	if (len && GetSendButtonState(m_hwnd) == PBS_DISABLED)
+	if (len && GetSendButtonState() == PBS_DISABLED)
 		EnableSendButton(true);
-	else if (len == 0 && GetSendButtonState(m_hwnd) != PBS_DISABLED)
+	else if (len == 0 && GetSendButtonState() != PBS_DISABLED)
 		EnableSendButton(false);
 
 	if (len) {          // looks complex but avoids flickering on the button while typing.
@@ -2072,52 +2115,50 @@ void CMsgDialog::UpdateTitle()
 
 		bool bChanged = false;
 		wchar_t newtitle[128];
-		if (m_hContact) {
-			if (m_szProto) {
-				szActProto = m_cache->getProto();
+		if (m_szProto) {
+			szActProto = m_cache->getProto();
 
-				bool bHasName = (m_cache->getUIN()[0] != 0);
-				m_idle = m_cache->getIdleTS();
-				m_bIsIdle = m_idle != 0;
+			bool bHasName = (m_cache->getUIN()[0] != 0);
+			m_idle = m_cache->getIdleTS();
+			m_bIsIdle = m_idle != 0;
 
-				m_wStatus = m_cache->getStatus();
-				wcsncpy_s(m_wszStatus, Clist_GetStatusModeDescription(m_szProto == nullptr ? ID_STATUS_OFFLINE : m_wStatus, 0), _TRUNCATE);
+			m_wStatus = m_cache->getStatus();
+			wcsncpy_s(m_wszStatus, Clist_GetStatusModeDescription(m_szProto == nullptr ? ID_STATUS_OFFLINE : m_wStatus, 0), _TRUNCATE);
 
-				wchar_t newcontactname[128]; newcontactname[0] = 0;
-				if (PluginConfig.m_bCutContactNameOnTabs)
-					CutContactName(m_cache->getNick(), newcontactname, _countof(newcontactname));
+			wchar_t newcontactname[128]; newcontactname[0] = 0;
+			if (PluginConfig.m_bCutContactNameOnTabs)
+				CutContactName(m_cache->getNick(), newcontactname, _countof(newcontactname));
+			else
+				wcsncpy_s(newcontactname, m_cache->getNick(), _TRUNCATE);
+
+			Utils::DoubleAmpersands(newcontactname, _countof(newcontactname));
+
+			if (newcontactname[0] != 0) {
+				if (PluginConfig.m_bStatusOnTabs)
+					mir_snwprintf(newtitle, L"%s (%s)", newcontactname, m_wszStatus);
 				else
-					wcsncpy_s(newcontactname, m_cache->getNick(), _TRUNCATE);
-
-				Utils::DoubleAmpersands(newcontactname, _countof(newcontactname));
-
-				if (newcontactname[0] != 0) {
-					if (PluginConfig.m_bStatusOnTabs)
-						mir_snwprintf(newtitle, L"%s (%s)", newcontactname, m_wszStatus);
-					else
-						wcsncpy_s(newtitle, newcontactname, _TRUNCATE);
-				}
-				else wcsncpy_s(newtitle, L"Forward", _TRUNCATE);
-
-				if (mir_wstrcmp(newtitle, m_wszTitle))
-					bChanged = true;
-				else if (m_wStatus != m_wOldStatus)
-					bChanged = true;
-
-				UpdateWindowIcon();
-
-				wchar_t fulluin[256];
-				if (m_bIsMeta)
-					mir_snwprintf(fulluin,
-					TranslateT("UID: %s (Shift+click -> copy to clipboard)\nClick for user's details\nRight click for metacontact control\nClick dropdown to add or remove user from your favorites."),
-					bHasName ? m_cache->getUIN() : TranslateT("No UID"));
-				else
-					mir_snwprintf(fulluin,
-					TranslateT("UID: %s (Shift+click -> copy to clipboard)\nClick for user's details\nClick dropdown to change this contact's favorite status."),
-					bHasName ? m_cache->getUIN() : TranslateT("No UID"));
-
-				SendDlgItemMessage(m_hwnd, IDC_NAME, BUTTONADDTOOLTIP, (WPARAM)fulluin, BATF_UNICODE);
+					wcsncpy_s(newtitle, newcontactname, _TRUNCATE);
 			}
+			else wcsncpy_s(newtitle, L"Forward", _TRUNCATE);
+
+			if (mir_wstrcmp(newtitle, m_wszTitle))
+				bChanged = true;
+			else if (m_wStatus != m_wOldStatus)
+				bChanged = true;
+
+			UpdateWindowIcon();
+
+			wchar_t fulluin[256];
+			if (m_bIsMeta)
+				mir_snwprintf(fulluin,
+				TranslateT("UID: %s (Shift+click -> copy to clipboard)\nClick for user's details\nRight click for metacontact control\nClick dropdown to add or remove user from your favorites."),
+				bHasName ? m_cache->getUIN() : TranslateT("No UID"));
+			else
+				mir_snwprintf(fulluin,
+				TranslateT("UID: %s (Shift+click -> copy to clipboard)\nClick for user's details\nClick dropdown to change this contact's favorite status."),
+				bHasName ? m_cache->getUIN() : TranslateT("No UID"));
+
+			SendDlgItemMessage(m_hwnd, IDC_NAME, BUTTONADDTOOLTIP, (WPARAM)fulluin, BATF_UNICODE);
 		}
 		else wcsncpy_s(newtitle, L"Message Session", _TRUNCATE);
 
@@ -2137,13 +2178,6 @@ void CMsgDialog::UpdateTitle()
 			}
 			if (m_pContainer->m_hwndActive == m_hwnd && bChanged)
 				m_pContainer->UpdateTitle(m_hContact);
-
-			UpdateTrayMenuState(this, TRUE);
-			if (M.IsFavorite(m_hContact))
-				AddContactToFavorites(m_hContact, m_cache->getNick(), szActProto, m_wszStatus, m_wStatus, Skin_LoadProtoIcon(m_cache->getProto(), m_cache->getStatus()), 0, PluginConfig.g_hMenuFavorites);
-
-			if (M.IsRecent(m_hContact))
-				AddContactToFavorites(m_hContact, m_cache->getNick(), szActProto, m_wszStatus, m_wStatus, Skin_LoadProtoIcon(m_cache->getProto(), m_cache->getStatus()), 0, PluginConfig.g_hMenuRecent);
 
 			m_pPanel.Invalidate();
 			if (m_pWnd)
@@ -2262,7 +2296,6 @@ void CMsgDialog::UpdateWindowState(UINT msg)
 		m_dwLastActivity = GetTickCount();
 		m_pContainer->m_dwLastActivity = m_dwLastActivity;
 		m_pContainer->m_pMenuBar->configureMenu();
-		UpdateTrayMenuState(this, FALSE);
 	}
 	else {
 		if (KillTimer(m_hwnd, TIMERID_FLASHWND)) {
@@ -2294,7 +2327,7 @@ void CMsgDialog::UpdateWindowState(UINT msg)
 		m_pContainer->m_dwLastActivity = m_dwLastActivity;
 
 		m_pContainer->m_pMenuBar->configureMenu();
-		UpdateTrayMenuState(this, FALSE);
+		g_arUnreadWindows.remove(HANDLE(m_hContact));
 
 		if (m_pContainer->m_hwndActive == m_hwnd)
 			DeletePopupsForContact(m_hContact, PU_REMOVE_ON_FOCUS);
@@ -2304,25 +2337,6 @@ void CMsgDialog::UpdateWindowState(UINT msg)
 		if (m_bDeferredScroll) {
 			m_bDeferredScroll = false;
 			DM_ScrollToBottom(0, 1);
-		}
-
-		if (m_iLogMode == WANT_IEVIEW_LOG) {
-			HWND hwndLog = m_pLog->GetHwnd();
-
-			RECT rcRTF;
-			GetWindowRect(hwndLog, &rcRTF);
-			rcRTF.left += 20;
-			rcRTF.top += 20;
-
-			POINT pt;
-			pt.x = rcRTF.left;
-			pt.y = rcRTF.top;
-
-			if (M.GetByte("subclassIEView", 0)) {
-				mir_subclassWindow(hwndLog, IEViewSubclassProc);
-				SetWindowPos(hwndLog, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_DRAWFRAME);
-				RedrawWindow(hwndLog, nullptr, nullptr, RDW_FRAME | RDW_INVALIDATE | RDW_UPDATENOW);
-			}
 		}
 	}
 

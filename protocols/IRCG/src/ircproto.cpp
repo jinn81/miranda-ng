@@ -71,6 +71,16 @@ CIrcProto::CIrcProto(const char* szModuleName, const wchar_t* tszUserName) :
 
 	CList_SetAllOffline(true);
 
+	// group chats
+	GCREGISTER gcr = {};
+	gcr.dwFlags = GC_CHANMGR | GC_BOLD | GC_ITALICS | GC_UNDERLINE | GC_COLOR | GC_BKGCOLOR;
+	gcr.ptszDispName = m_tszUserName;
+	gcr.pszModule = m_szModuleName;
+	Chat_Register(&gcr);
+
+	HookProtoEvent(ME_GC_EVENT, &CIrcProto::GCEventHook);
+	HookProtoEvent(ME_GC_BUILDMENU, &CIrcProto::GCMenuHook);
+
 	IRC_MAP_ENTRY("PING", PING)
 		IRC_MAP_ENTRY("JOIN", JOIN)
 		IRC_MAP_ENTRY("QUIT", QUIT)
@@ -194,15 +204,6 @@ void CIrcProto::OnModulesLoaded()
 	mir_snwprintf(name, TranslateT("%s client-to-client connections"), m_tszUserName);
 	nlu.szDescriptiveName.w = name;
 	hNetlibDCC = Netlib_RegisterUser(&nlu);
-
-	GCREGISTER gcr = {};
-	gcr.dwFlags = GC_CHANMGR | GC_BOLD | GC_ITALICS | GC_UNDERLINE | GC_COLOR | GC_BKGCOLOR;
-	gcr.ptszDispName = m_tszUserName;
-	gcr.pszModule = m_szModuleName;
-	Chat_Register(&gcr);
-
-	HookProtoEvent(ME_GC_EVENT, &CIrcProto::GCEventHook);
-	HookProtoEvent(ME_GC_BUILDMENU, &CIrcProto::GCMenuHook);
 
 	m_pServer = Chat_NewSession(GCW_SERVER, m_szModuleName, SERVERWINDOW, _A2T(m_network));
 
@@ -381,21 +382,20 @@ int CIrcProto::FileDeny(MCONTACT, HANDLE hTransfer, const wchar_t*)
 ////////////////////////////////////////////////////////////////////////////////////////
 // FileResume - processes file renaming etc
 
-int CIrcProto::FileResume(HANDLE hTransfer, int* action, const wchar_t** szFilename)
+int CIrcProto::FileResume(HANDLE hTransfer, int action, const wchar_t *szFilename)
 {
 	DCCINFO* di = (DCCINFO*)hTransfer;
 
-	long i = (long)*action;
-
+	long i = action;
 	CDccSession *dcc = FindDCCSession(di);
 	if (dcc) {
 		InterlockedExchange(&dcc->dwWhatNeedsDoing, i);
-		if (*action == FILERESUME_RENAME) {
-			wchar_t* szTemp = wcsdup(*szFilename);
+		if (action == FILERESUME_RENAME) {
+			wchar_t* szTemp = wcsdup(szFilename);
 			InterlockedExchangePointer((PVOID*)&dcc->NewFileName, szTemp);
 		}
 
-		if (*action == FILERESUME_RESUME) {
+		if (action == FILERESUME_RESUME) {
 			unsigned __int64 dwPos = 0;
 
 			struct _stati64 statbuf;
@@ -443,7 +443,7 @@ INT_PTR CIrcProto::GetCaps(int type, MCONTACT)
 		return PF4_NOAUTHDENYREASON | PF4_NOCUSTOMAUTH;
 
 	case PFLAG_UNIQUEIDTEXT:
-		return (INT_PTR)Translate("Nickname");
+		return (INT_PTR)TranslateT("Nickname");
 
 	case PFLAG_MAXLENOFMESSAGE:
 		return 400;
@@ -630,47 +630,17 @@ HANDLE CIrcProto::SendFile(MCONTACT hContact, const wchar_t*, wchar_t** ppszFile
 ////////////////////////////////////////////////////////////////////////////////////////
 // SendMessage - sends a message
 
-struct TFakeAckParam
-{
-	__inline TFakeAckParam(MCONTACT _hContact, int _msgid) :
-		hContact(_hContact), msgid(_msgid)
-	{}
-
-	MCONTACT hContact;
-	int    msgid;
-};
-
-void __cdecl CIrcProto::AckMessageFail(void *info)
-{
-	Thread_SetName("IRC: AckMessageFail");
-	ProtoBroadcastAck((UINT_PTR)info, ACKTYPE_MESSAGE, ACKRESULT_FAILED, nullptr, (LPARAM)TranslateT("The protocol is not online"));
-}
-
-void __cdecl CIrcProto::AckMessageFailDcc(void *info)
-{
-	Thread_SetName("IRC: AckMessageFailDcc");
-	ProtoBroadcastAck((UINT_PTR)info, ACKTYPE_MESSAGE, ACKRESULT_FAILED, nullptr, (LPARAM)TranslateT("The dcc chat connection is not active"));
-}
-
-void __cdecl CIrcProto::AckMessageSuccess(void *info)
-{
-	Thread_SetName("IRC: AckMessageSuccess");
-	TFakeAckParam *param = (TFakeAckParam*)info;
-	ProtoBroadcastAck(param->hContact, ACKTYPE_MESSAGE, ACKRESULT_SUCCESS, (HANDLE)param->msgid, 0);
-	delete param;
-}
-
 int CIrcProto::SendMsg(MCONTACT hContact, int, const char* pszSrc)
 {
 	BYTE bDcc = getByte(hContact, "DCC", 0);
 	WORD wStatus = getWord(hContact, "Status", ID_STATUS_OFFLINE);
 	if (bDcc && wStatus != ID_STATUS_ONLINE) {
-		ForkThread(&CIrcProto::AckMessageFailDcc, (void*)hContact);
+		ProtoBroadcastAsync(hContact, ACKTYPE_MESSAGE, ACKRESULT_FAILED, nullptr, (LPARAM)TranslateT("The dcc chat connection is not active"));
 		return 0;
 	}
 	
 	if (!bDcc && (m_iStatus == ID_STATUS_OFFLINE || m_iStatus == ID_STATUS_CONNECTING)) {
-		ForkThread(&CIrcProto::AckMessageFail, (void*)hContact);
+		ProtoBroadcastAsync(hContact, ACKTYPE_MESSAGE, ACKRESULT_FAILED, nullptr, (LPARAM)TranslateT("The protocol is not online"));
 		return 0;
 	}
 
@@ -680,7 +650,7 @@ int CIrcProto::SendMsg(MCONTACT hContact, int, const char* pszSrc)
 	mir_free(result);
 
 	int seq = InterlockedIncrement(&g_msgid);
-	ForkThread(&CIrcProto::AckMessageSuccess, new TFakeAckParam(hContact, seq));
+	ProtoBroadcastAsync(hContact, ACKTYPE_MESSAGE, ACKRESULT_SUCCESS, (HANDLE)seq);
 	return seq;
 }
 

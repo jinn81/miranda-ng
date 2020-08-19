@@ -22,6 +22,16 @@ struct DBCachedContact : public DBCachedContactBase
 	void MarkRead(MEVENT hDbEvent);
 };
 
+struct CDbxSQLiteEventCursor : public DB::EventCursor
+{
+	CDbxSQLiteEventCursor(MCONTACT _1, sqlite3* m_db, MEVENT hDbEvent, bool reverse = false);
+	~CDbxSQLiteEventCursor() override;
+	MEVENT FetchNext() override;
+private:
+	sqlite3* m_db;
+	sqlite3_stmt* cursor;
+};
+
 struct CDbxSQLite : public MDatabaseCommon, public MZeroedObject
 {
 private:
@@ -63,9 +73,9 @@ public:
 	STDMETHODIMP_(LONG)     GetContactSize(void) override;
 
 	STDMETHODIMP_(LONG)     GetEventCount(MCONTACT contactID) override;
-	STDMETHODIMP_(MEVENT)   AddEvent(MCONTACT contactID, DBEVENTINFO *dbe) override;
+	STDMETHODIMP_(MEVENT)   AddEvent(MCONTACT contactID, const DBEVENTINFO *dbe) override;
 	STDMETHODIMP_(BOOL)     DeleteEvent(MEVENT hDbEvent) override;
-	STDMETHODIMP_(BOOL)     EditEvent(MCONTACT contactID, MEVENT hDbEvent, DBEVENTINFO *dbe) override;
+	STDMETHODIMP_(BOOL)     EditEvent(MCONTACT contactID, MEVENT hDbEvent, const DBEVENTINFO *dbe) override;
 	STDMETHODIMP_(LONG)     GetBlobSize(MEVENT hDbEvent) override;
 	STDMETHODIMP_(BOOL)     GetEvent(MEVENT hDbEvent, DBEVENTINFO *dbe) override;
 	STDMETHODIMP_(BOOL)     MarkEventRead(MCONTACT contactID, MEVENT hDbEvent) override;
@@ -77,7 +87,6 @@ public:
 	STDMETHODIMP_(MEVENT)   FindPrevEvent(MCONTACT contactID, MEVENT hDbEvent) override;
 
 	STDMETHODIMP_(MEVENT)   GetEventById(LPCSTR szModule, LPCSTR szId) override;
-	STDMETHODIMP_(BOOL)     SetEventId(LPCSTR szModule, MEVENT, LPCSTR szId) override;
 
 	STDMETHODIMP_(BOOL)     EnumModuleNames(DBMODULEENUMPROC pFunc, void *pParam) override;
 
@@ -91,4 +100,7 @@ public:
 
 	STDMETHODIMP_(BOOL)     Compact() override;
 	STDMETHODIMP_(BOOL)     Backup(LPCWSTR) override;
+
+	STDMETHODIMP_(DB::EventCursor*) EventCursor(MCONTACT hContact, MEVENT hDbEvent) override;
+	STDMETHODIMP_(DB::EventCursor*) EventCursorRev(MCONTACT hContact, MEVENT hDbEvent) override;
 };

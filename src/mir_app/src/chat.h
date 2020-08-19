@@ -43,6 +43,8 @@ extern LIST<SESSION_INFO> g_arSessions;
 extern MWindowList g_hWindowList;
 extern HANDLE hevSendEvent, hevBuildMenuEvent;
 
+extern CMOption<bool> g_bChatTrayInactive, g_bChatPopupInactive;
+
 // log.c
 void          LoadMsgLogBitmaps(void);
 void          FreeMsgLogBitmaps(void);
@@ -94,6 +96,8 @@ INT_PTR       LeaveChat(WPARAM wParam, LPARAM lParam);
 int           PrebuildContactMenu(WPARAM wParam, LPARAM lParam);
 
 // options.c
+void          ChatOptionsInit(WPARAM wParam);
+
 int           OptionsInit(void);
 int           OptionsUnInit(void);
 void          LoadMsgDlgFont(int i, LOGFONT * lf, COLORREF * colour);
@@ -109,7 +113,6 @@ int           LoadChatModule(void);
 void          UnloadChatModule(void);
 
 // tools.c
-UINT          CreateGCMenu(HWND hwnd, HMENU hMenu, POINT pt, SESSION_INFO *si, const wchar_t *pszUID, const wchar_t *pszWordText);
 int           DoRtfToTags(CMStringW &pszText, int iNumColors, COLORREF *pColors);
 wchar_t*      RemoveFormatting(const wchar_t* pszText);
 BOOL          DoSoundsFlashPopupTrayStuff(SESSION_INFO *si, GCEVENT *gce, BOOL bHighlight, int bManyFix);
@@ -122,6 +125,8 @@ BOOL          DoPopup(SESSION_INFO *si, GCEVENT *gce);
 int           ShowPopup(MCONTACT hContact, SESSION_INFO *si, HICON hIcon, char* pszProtoName, wchar_t* pszRoomName, COLORREF crBkg, const wchar_t* fmt, ...);
 
 CSrmmLogWindow *Srmm_GetLogWindow(CMsgDialog *pDlg);
+
+void          Chat_RemoveContact(MCONTACT hContact);
 
 const wchar_t* my_strstri(const wchar_t* s1, const wchar_t* s2);
 

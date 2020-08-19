@@ -19,12 +19,15 @@
 
 #pragma warning(disable:4512 4267 4127)
 
+#define WIN32_LEAN_AND_MEAN
 #define _SCL_SECURE_NO_WARNINGS
+
+#include <io.h>
 
 // windows
 #include <windows.h>
+#include <commdlg.h>
 #include <shlobj.h>
-#include <io.h>
 #include <shlwapi.h>
 
 // c++
@@ -48,9 +51,11 @@ using std::fstream;
 
 // boost process
 #include <boost/process.hpp>
+#include <boost/process/windows.hpp>
 
 // miranda
 #include <newpluginapi.h>
+#include <m_contacts.h>
 #include <m_database.h>
 #include <m_options.h>
 #include <m_langpack.h>
@@ -68,6 +73,10 @@ using std::fstream;
 
 struct CMPlugin : public PLUGIN<CMPlugin>
 {
+	CMOption<bool> bJabberAPI, bPresenceSigning, bFileTransfers, bAutoExchange, bSameAction, bAppendTags, bStripTags, bDebugLog, bSendErrorMessages;
+	HANDLE hCLIcon = nullptr;
+	HGENMENU hToggleEncryption = nullptr, hSendKey = nullptr;
+
 	CMPlugin();
 
 	int Load() override;
@@ -80,7 +89,6 @@ struct CMPlugin : public PLUGIN<CMPlugin>
 #include "constants.h"
 #include "log.h"
 #include "utilities.h"
-#include "main.h"
 #include "gpg_wrapper.h"
 #include "jabber_account.h"
 #include "metacontacts.h"

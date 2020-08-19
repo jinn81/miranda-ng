@@ -37,30 +37,6 @@ LIST<CMsgDialog> g_arDialogs(10, PtrKeySortT);
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-static void AddToFileList(wchar_t ***pppFiles, int &totalCount, const wchar_t *szFilename)
-{
-	*pppFiles = (wchar_t **)mir_realloc(*pppFiles, (++totalCount + 1) * sizeof(wchar_t *));
-	(*pppFiles)[totalCount] = nullptr;
-	(*pppFiles)[totalCount - 1] = mir_wstrdup(szFilename);
-
-	if (GetFileAttributes(szFilename) & FILE_ATTRIBUTE_DIRECTORY) {
-		WIN32_FIND_DATA fd;
-		wchar_t szPath[MAX_PATH];
-		mir_snwprintf(szPath, L"%s\\*", szFilename);
-		HANDLE hFind = FindFirstFile(szPath, &fd);
-		if (hFind != INVALID_HANDLE_VALUE) {
-			do {
-				if (!mir_wstrcmp(fd.cFileName, L".") || !mir_wstrcmp(fd.cFileName, L"..")) continue;
-				mir_snwprintf(szPath, L"%s\\%s", szFilename, fd.cFileName);
-				AddToFileList(pppFiles, totalCount, szPath);
-			} while (FindNextFile(hFind, &fd));
-			FindClose(hFind);
-		}
-	}
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////
-
 CMsgDialog::CMsgDialog(CTabbedWindow *pOwner, MCONTACT hContact) :
 	CSuper(g_plugin, IDD_MSG),
 	m_btnOk(this, IDOK),
@@ -154,7 +130,7 @@ bool CMsgDialog::OnInitDialog()
 	m_iSplitterY = g_plugin.getDword(g_dat.bSavePerContact ? m_hContact : 0, "splitterPos", m_minEditInit.bottom - m_minEditInit.top);
 	UpdateSizeBar();
 
-	m_message.SendMsg(EM_SETEVENTMASK, 0, ENM_CHANGE);
+	m_message.SendMsg(EM_SETEVENTMASK, 0, ENM_MOUSEEVENTS | ENM_CHANGE);
 
 	if (isChat()) {
 		m_avatar.Hide();
@@ -252,15 +228,6 @@ bool CMsgDialog::OnInitDialog()
 			}
 		}
 
-		int flag = m_bNoActivate ? RWPF_HIDDEN : 0;
-		if (Utils_RestoreWindowPosition(m_hwnd, g_dat.bSavePerContact ? m_hContact : 0, SRMMMOD, "", flag)) {
-			if (g_dat.bSavePerContact) {
-				if (Utils_RestoreWindowPosition(m_hwnd, 0, SRMMMOD, "", flag | RWPF_NOMOVE))
-					SetWindowPos(m_hwnd, nullptr, 0, 0, 450, 300, SWP_NOZORDER | SWP_NOMOVE | SWP_SHOWWINDOW);
-			}
-			else SetWindowPos(m_hwnd, nullptr, 0, 0, 450, 300, SWP_NOZORDER | SWP_NOMOVE | SWP_SHOWWINDOW);
-		}
-
 		if (m_bNoActivate) {
 			SetWindowPos(m_hwnd, HWND_BOTTOM, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
 			StartFlash();
@@ -355,6 +322,8 @@ void CMsgDialog::OnActivate()
 		UpdateLastMessage();
 		FixTabIcons();
 	}
+	
+	SetFocus(m_message.GetHwnd());
 }
 
 void CMsgDialog::onClick_Filter(CCtrlButton *pButton)
@@ -573,8 +542,8 @@ INT_PTR CMsgDialog::DlgProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
 		break;
 
 	case WM_DROPFILES: // Mod from tabsrmm
-		ProcessFileDrop((HDROP)wParam);
-		return TRUE;
+		ProcessFileDrop((HDROP)wParam, m_hContact);
+		return FALSE;
 
 	case HM_AVATARACK:
 		ShowAvatar();
@@ -900,8 +869,15 @@ INT_PTR CMsgDialog::DlgProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
 					if ((si.nPos + (int)si.nPage + 5) >= si.nMax)
 						StopFlash();
 				}
-				break;
 			}
+			break;
+
+		case IDC_SRMM_MESSAGE:
+			if (((LPNMHDR)lParam)->code == EN_MSGFILTER && ((MSGFILTER *)lParam)->msg == WM_RBUTTONUP) {
+				SetWindowLongPtr(m_hwnd, DWLP_MSGRESULT, TRUE);
+				return TRUE;
+			}
+			break;
 		}
 		break;
 
@@ -938,7 +914,6 @@ INT_PTR CMsgDialog::DlgProc(UINT uMsg, WPARAM wParam, LPARAM lParam)
 		if (LOWORD(wParam) != WA_ACTIVE)
 			break;
 
-		SetFocus(m_message.GetHwnd());
 		__fallthrough;
 
 	case WM_MOUSEACTIVATE:
@@ -972,11 +947,6 @@ static const CHARRANGE rangeAll = { 0, -1 };
 LRESULT CMsgDialog::WndProc_Message(UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	switch (msg) {
-	case WM_MOUSEWHEEL:
-		LOG()->WndProc(msg, wParam, lParam);
-		m_iLastEnterTime = 0;
-		return TRUE;
-
 	case EM_REPLACESEL:
 		PostMessage(m_message.GetHwnd(), EM_ACTIVATE, 0, 0);
 		break;
@@ -986,9 +956,10 @@ LRESULT CMsgDialog::WndProc_Message(UINT msg, WPARAM wParam, LPARAM lParam)
 		break;
 
 	case WM_DROPFILES:
-		ProcessFileDrop((HDROP)wParam);
-		break;
+		ProcessFileDrop((HDROP)wParam, m_hContact);
+		return FALSE;
 
+	case WM_MOUSEWHEEL:
 	case WM_LBUTTONDOWN:
 	case WM_RBUTTONDOWN:
 	case WM_MBUTTONDOWN:
@@ -1081,7 +1052,7 @@ LRESULT CMsgDialog::WndProc_Message(UINT msg, WPARAM wParam, LPARAM lParam)
 				break;
 
 			case IDM_PASTESEND:
-				m_message.SendMsg(EM_PASTESPECIAL, CF_TEXT, 0);
+				m_message.SendMsg(EM_PASTESPECIAL, CF_UNICODETEXT, 0);
 				m_btnOk.Click();
 				break;
 
@@ -1106,11 +1077,11 @@ LRESULT CMsgDialog::WndProc_Message(UINT msg, WPARAM wParam, LPARAM lParam)
 			if (OpenClipboard(m_message.GetHwnd())) {
 				HANDLE hDrop = GetClipboardData(CF_HDROP);
 				if (hDrop)
-					ProcessFileDrop((HDROP)hDrop);
+					ProcessFileDrop((HDROP)hDrop, m_hContact);
 				CloseClipboard();
 			}
 		}
-		else m_message.SendMsg(EM_PASTESPECIAL, CF_TEXT, 0);
+		else m_message.SendMsg(EM_PASTESPECIAL, CF_UNICODETEXT, 0);
 		return 0;
 
 	case WM_KEYDOWN:
@@ -1184,7 +1155,7 @@ LRESULT CMsgDialog::WndProc_Message(UINT msg, WPARAM wParam, LPARAM lParam)
 			}
 
 			if ((wParam == 45 && isShift || wParam == 0x56 && isCtrl) && !isAlt) { // ctrl-v (paste clean text)
-				m_message.SendMsg(EM_PASTESPECIAL, CF_TEXT, 0);
+				m_message.SendMsg(EM_PASTESPECIAL, CF_UNICODETEXT, 0);
 				return TRUE;
 			}
 
@@ -1409,7 +1380,8 @@ void CMsgDialog::OnOptionsApplied(bool bUpdateAvatar)
 	m_message.SendMsg(EM_SETCHARFORMAT, SCF_ALL, (WPARAM)&cf);
 
 	m_pLog->Clear();
-	RemakeLog();
+	if (!isChat())
+		RemakeLog();
 	FixTabIcons();
 }
 
@@ -1497,29 +1469,7 @@ void CMsgDialog::NotifyTyping(int mode)
 
 void CMsgDialog::RemakeLog()
 {
-	m_pLog->LogEvents(m_hDbEventFirst, -1, 0);
-}
-
-void CMsgDialog::ProcessFileDrop(HDROP hDrop)
-{
-	if (m_szProto == nullptr) return;
-	if (!(CallProtoService(m_szProto, PS_GETCAPS, PFLAGNUM_1, 0) & PF1_FILESEND)) return;
-	if (m_wStatus == ID_STATUS_OFFLINE) return;
-	if (m_hContact != 0) {
-		wchar_t szFilename[MAX_PATH];
-		int fileCount = DragQueryFile(hDrop, -1, nullptr, 0), totalCount = 0;
-		wchar_t **ppFiles = nullptr;
-		for (int i = 0; i < fileCount; i++) {
-			DragQueryFile(hDrop, i, szFilename, _countof(szFilename));
-			AddToFileList(&ppFiles, totalCount, szFilename);
-		}
-		CallServiceSync(MS_FILE_SENDSPECIFICFILEST, m_hContact, (LPARAM)ppFiles);
-		if (ppFiles) {
-			for (int i = 0; ppFiles[i]; i++)
-				mir_free(ppFiles[i]);
-			mir_free(ppFiles);
-		}
-	}
+	m_pLog->LogEvents(m_hDbEventFirst, -1, false);
 }
 
 void CMsgDialog::ShowAvatar()
@@ -1718,6 +1668,28 @@ void CMsgDialog::UpdateTitle()
 		GetWindowText(m_pOwner->GetHwnd(), oldtitle, _countof(oldtitle));
 		if (mir_wstrcmp(newtitle, oldtitle)) //swt() flickers even if the title hasn't actually changed
 			SetWindowText(m_pOwner->GetHwnd(), newtitle);
+	}
+
+	if (!isChat()) {
+		int idx = m_pOwner->m_tab.GetDlgIndex(this);
+		if (idx == -1)
+			return;
+
+		auto *pwszName = Clist_GetContactDisplayName(m_hContact);
+		wchar_t oldtitle[256];
+
+		TCITEM ti;
+		ti.mask = TCIF_TEXT;
+		ti.pszText = oldtitle;
+		ti.cchTextMax = _countof(oldtitle);
+		TabCtrl_GetItem(m_pOwner->m_tab.GetHwnd(), idx, &ti);
+
+		// change text only if it was changed
+		if (mir_wstrcmp(pwszName, oldtitle)) {
+			ti.pszText = pwszName;
+			ti.cchTextMax = 0;
+			TabCtrl_SetItem(m_pOwner->m_tab.GetHwnd(), idx, &ti);
+		}
 	}
 }
 

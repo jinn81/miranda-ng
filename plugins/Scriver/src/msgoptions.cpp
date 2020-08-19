@@ -85,7 +85,7 @@ void RegisterFontServiceFonts()
 	wcsncpy_s(fid.group, LPGENW("Messaging"), _TRUNCATE);
 	wcsncpy_s(fid.backgroundGroup, LPGENW("Messaging"), _TRUNCATE);
 	strncpy(fid.dbSettingsGroup, SRMM_MODULE, _countof(fid.dbSettingsGroup));
-	fid.flags = FIDF_DEFAULTVALID | FIDF_DEFAULTVALID;
+	fid.flags = FIDF_DEFAULTVALID;
 	for (int i = 0; i < _countof(fontOptionsList); i++) {
 		fid.order = i;
 
@@ -105,7 +105,6 @@ void RegisterFontServiceFonts()
 	ColourIDW cid = {};
 	wcsncpy_s(cid.group, LPGENW("Messaging"), _TRUNCATE);
 	strncpy(cid.dbSettingsGroup, SRMM_MODULE, _countof(fid.dbSettingsGroup));
-	cid.flags = 0;
 	for (int i = 0; i < _countof(colourOptionsList); i++) {
 		cid.order = i;
 		wcsncpy(cid.name, colourOptionsList[i].szName, _countof(cid.name));
@@ -806,7 +805,7 @@ public:
 
 	void onResetClist(CCtrlClc *)
 	{
-		m_list.SetUseGroups(db_get_b(0, "CList", "UseGroups", SETTING_USEGROUPS_DEFAULT));
+		m_list.SetUseGroups(Clist::UseGroups);
 		m_list.SetHideEmptyGroups(true);
 	}
 };

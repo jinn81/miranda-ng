@@ -19,55 +19,66 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 ////////////////////// Account manager dialog ////////////////////////////////
 
+class CVkAccMgrForm : public CVkDlgBase
+{
+	typedef CVkDlgBase CSuper;
+
+	CCtrlEdit m_edtLogin;
+	CCtrlEdit m_edtPassword;
+	CCtrlHyperlink m_hlLink;
+
+	pass_ptrW m_pwszOldPass;
+	ptrW m_pwszOldLogin;
+
+public:
+	CVkAccMgrForm(CVkProto *proto, HWND hwndParent) :
+		CVkDlgBase(proto, IDD_ACCMGRUI),
+		m_edtLogin(this, IDC_LOGIN),
+		m_edtPassword(this, IDC_PASSWORD),
+		m_hlLink(this, IDC_URL, "https://vk.com/")
+	{
+		SetParent(hwndParent);
+
+		CreateLink(m_edtLogin, "Login", L"");
+	}
+
+	bool OnInitDialog() override
+	{
+		CSuper::OnInitDialog();
+
+		m_pwszOldLogin = m_edtLogin.GetText();
+		m_edtLogin.SendMsg(EM_LIMITTEXT, 1024, 0);
+
+		m_pwszOldPass = m_proto->GetUserStoredPassword();
+		m_edtPassword.SetText(m_pwszOldPass);
+		m_edtPassword.SendMsg(EM_LIMITTEXT, 1024, 0);
+		return true;
+	}
+
+	bool OnApply() override
+	{
+		pass_ptrW pwszNewPass(m_edtPassword.GetText());
+		bool bPassChanged = mir_wstrcmp(m_pwszOldPass, pwszNewPass) != 0;
+		if (bPassChanged) {
+			T2Utf szRawPasswd(pwszNewPass);
+			m_proto->setString("Password", szRawPasswd);
+			pass_ptrA pszPass(szRawPasswd.detach());
+			m_pwszOldPass = pwszNewPass.detach();
+		}
+
+		ptrW pwszNewLogin(m_edtLogin.GetText());
+		if (bPassChanged || mir_wstrcmpi(m_pwszOldLogin, pwszNewLogin))
+			m_proto->ClearAccessToken();
+		m_pwszOldLogin = pwszNewLogin.detach();
+		return true;
+	}
+};
+
 INT_PTR CVkProto::SvcCreateAccMgrUI(WPARAM, LPARAM lParam)
 {
 	CVkAccMgrForm *dlg = new CVkAccMgrForm(this, (HWND)lParam);
 	dlg->Show();
 	return (INT_PTR)dlg->GetHwnd();
-}
-
-//////////////////////////////////////////////////////////////////////////////
-
-CVkAccMgrForm::CVkAccMgrForm(CVkProto *proto, HWND hwndParent) :
-	CVkDlgBase(proto, IDD_ACCMGRUI),
-	m_edtLogin(this, IDC_LOGIN),
-	m_edtPassword(this, IDC_PASSWORD),
-	m_hlLink(this, IDC_URL, "https://vk.com/")
-{
-	SetParent(hwndParent);
-
-	CreateLink(m_edtLogin, "Login", L"");
-}
-
-bool CVkAccMgrForm::OnInitDialog()
-{
-	CSuper::OnInitDialog();
-
-	m_pwszOldLogin = m_edtLogin.GetText();
-	m_edtLogin.SendMsg(EM_LIMITTEXT, 1024, 0);
-
-	m_pwszOldPass = m_proto->GetUserStoredPassword();
-	m_edtPassword.SetText(m_pwszOldPass);
-	m_edtPassword.SendMsg(EM_LIMITTEXT, 1024, 0);
-	return true;
-}
-
-bool CVkAccMgrForm::OnApply()
-{
-	pass_ptrW pwszNewPass(m_edtPassword.GetText());
-	bool bPassChanged = mir_wstrcmp(m_pwszOldPass, pwszNewPass) != 0;
-	if (bPassChanged) {
-		T2Utf szRawPasswd(pwszNewPass);
-		m_proto->setString("Password", szRawPasswd);
-		pass_ptrA pszPass(szRawPasswd.detach());
-		m_pwszOldPass = pwszNewPass;
-	}
-
-	ptrW pwszNewLogin(m_edtLogin.GetText());
-	if (bPassChanged || mir_wstrcmpi(m_pwszOldLogin, pwszNewLogin))
-		m_proto->ClearAccessToken();
-	m_pwszOldLogin = pwszNewLogin;
-	return true;
 }
 
 ////////////////////// Options ///////////////////////////////////////////////
@@ -244,8 +255,7 @@ CVkOptionAdvancedForm::CVkOptionAdvancedForm(CVkProto *proto) :
 	m_cbMusicSendOff(this, IDC_SEND_MUSIC_NONE),
 	m_cbMusicSendBroadcastAndStatus(this, IDC_SEND_MUSIC_BROADCAST_AND_STATUS),
 	m_cbSendMetodBroadcast(this, IDC_SEND_MUSIC_BROADCAST),
-	m_cbMusicSendStatus(this, IDC_SEND_MUSIC_STATUS),
-	m_edtReturnChatMessage(this, IDC_RET_CHAT_MES)
+	m_cbMusicSendStatus(this, IDC_SEND_MUSIC_STATUS)
 {
 	CreateLink(m_cbHideChats, m_proto->m_vkOptions.bHideChats);
 	CreateLink(m_cbSyncReadMessageStatusFromServer, m_proto->m_vkOptions.bSyncReadMessageStatusFromServer);
@@ -259,7 +269,6 @@ CVkOptionAdvancedForm::CVkOptionAdvancedForm(CVkProto *proto) :
 	CreateLink(m_cbClearServerHistory, m_proto->m_vkOptions.bClearServerHistory);
 	CreateLink(m_cbRemoveFromFrendlist, m_proto->m_vkOptions.bRemoveFromFrendlist);
 	CreateLink(m_cbRemoveFromCList, m_proto->m_vkOptions.bRemoveFromCList);
-	CreateLink(m_edtReturnChatMessage, m_proto->m_vkOptions.pwszReturnChatMessage);
 
 	m_cbForceInvisibleStatus.OnChange = Callback(this, &CVkOptionAdvancedForm::On_cbForceInvisibleStatusChange);
 	m_cbSendVKLinksAsAttachments.OnChange = Callback(this, &CVkOptionAdvancedForm::On_cbSendVKLinksAsAttachmentsChange);
@@ -431,7 +440,7 @@ CVkOptionViewForm::CVkOptionViewForm(CVkProto *proto) :
 	m_cbUseNonStandardNotifications(this, IDC_USENOSTDPOPUPS)
 {
 	CreateLink(m_cbUseBBCOnAttacmentsAsNews, m_proto->m_vkOptions.bUseBBCOnAttacmentsAsNews);
-	CreateLink(m_cbStikersAsSmyles, m_proto->m_vkOptions.bStikersAsSmyles);
+	CreateLink(m_cbStikersAsSmyles, m_proto->m_vkOptions.bStikersAsSmileys);
 	CreateLink(m_cbShortenLinksForAudio, m_proto->m_vkOptions.bShortenLinksForAudio);
 	CreateLink(m_cbAddMessageLinkToMesWAtt, m_proto->m_vkOptions.bAddMessageLinkToMesWAtt);
 	CreateLink(m_cbUseNonStandardNotifications, m_proto->m_vkOptions.bUseNonStandardNotifications);

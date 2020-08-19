@@ -43,7 +43,6 @@ public:
 
 	void Attach() override;
 	void LogEvents(MEVENT hDbEventFirst, int count, bool bAppend) override;
-	void LogEvents(DBEVENTINFO *dbei, bool bAppend);
 	void LogEvents(struct LOGINFO *, bool) override;
 	void UpdateOptions() override;
 
@@ -58,7 +57,6 @@ class CMsgDialog : public CSrmmBaseDialog
 
 	void Init(void);
 	void NotifyTyping(int mode);
-	void ProcessFileDrop(HDROP hDrop);
 	void ShowAvatar(void);
 	void ShowTime(bool bForce);
 	void SetupStatusBar(void);

@@ -132,8 +132,7 @@ bool CMsgDialog::DM_GenericHotkeysCheck(MSG *message)
 		return true;
 
 	case TABSRMM_HK_CONTAINEROPTIONS:
-		if (m_pContainer->m_hWndOptions == nullptr)
-			CreateDialogParam(g_plugin.getInst(), MAKEINTRESOURCE(IDD_CONTAINEROPTIONS), m_pContainer->m_hwnd, DlgProcContainerOptions, (LPARAM)m_pContainer);
+		m_pContainer->OptionsDialog();
 		return true;
 
 	case TABSRMM_HK_SEND:
@@ -249,8 +248,8 @@ LRESULT CMsgDialog::DM_MsgWindowCmdHandler(UINT cmd, WPARAM wParam, LPARAM lPara
 		return MsgWindowMenuHandler(iSelection, MENU_LOGMENU);
 
 	case IDC_PROTOMENU:
-		if (m_hContact) {
-			submenu = GetSubMenu(PluginConfig.g_hMenuContext, 4);
+		submenu = GetSubMenu(PluginConfig.g_hMenuContext, 4);
+		{
 			int iOldGlobalSendFormat = PluginConfig.m_SendFormat;
 			int iLocalFormat = M.GetDword(m_hContact, "sendformat", 0);
 			int iNewLocalFormat = iLocalFormat;
@@ -278,7 +277,7 @@ LRESULT CMsgDialog::DM_MsgWindowCmdHandler(UINT cmd, WPARAM wParam, LPARAM lPara
 				DM_RecalcPictureSize();
 				Resize();
 				break;
-			
+
 			case ID_MODE_PRIVATE:
 				m_bSplitterOverride = true;
 				db_set_b(m_hContact, SRMSGMOD_T, "splitoverride", 1);
@@ -287,28 +286,28 @@ LRESULT CMsgDialog::DM_MsgWindowCmdHandler(UINT cmd, WPARAM wParam, LPARAM lPara
 				DM_RecalcPictureSize();
 				Resize();
 				break;
-			
+
 			case ID_GLOBAL_BBCODE:
 				PluginConfig.m_SendFormat = SENDFORMAT_BBCODE;
 				break;
-			
+
 			case ID_GLOBAL_OFF:
 				PluginConfig.m_SendFormat = SENDFORMAT_NONE;
 				break;
-			
+
 			case ID_THISCONTACT_GLOBALSETTING:
 				iNewLocalFormat = 0;
 				break;
-			
+
 			case ID_THISCONTACT_BBCODE:
 				iNewLocalFormat = SENDFORMAT_BBCODE;
 				break;
-			
+
 			case ID_THISCONTACT_OFF:
 				iNewLocalFormat = -1;
 				break;
 			}
-			
+
 			if (iNewLocalFormat == 0)
 				db_unset(m_hContact, SRMSGMOD_T, "sendformat");
 			else if (iNewLocalFormat != iLocalFormat)
@@ -331,29 +330,6 @@ LRESULT CMsgDialog::DM_MsgWindowCmdHandler(UINT cmd, WPARAM wParam, LPARAM lPara
 		else
 			m_pContainer->m_flags.m_bHideToolbar = !m_pContainer->m_flags.m_bHideToolbar;
 		m_pContainer->ApplySetting(true);
-		break;
-
-	case IDC_INFOPANELMENU:
-		submenu = GetSubMenu(PluginConfig.g_hMenuContext, 7);
-		GetWindowRect(GetDlgItem(m_hwnd, IDC_NAME), &rc);
-		{
-			bool bIsFavorite = M.IsFavorite(m_hContact);
-			EnableMenuItem(submenu, ID_FAVORITES_ADDCONTACTTOFAVORITES, !bIsFavorite ? MF_ENABLED : MF_GRAYED);
-			EnableMenuItem(submenu, ID_FAVORITES_REMOVECONTACTFROMFAVORITES, bIsFavorite ? MF_ENABLED : MF_GRAYED);
-		}
-		iSelection = TrackPopupMenu(submenu, TPM_RETURNCMD, rc.left, rc.bottom, 0, m_hwnd, nullptr);
-
-		switch (iSelection) {
-		case ID_FAVORITES_ADDCONTACTTOFAVORITES:
-			M.SetFavorite(m_hContact, 1);
-			AddContactToFavorites(m_hContact, m_cache->getNick(), m_cache->getProto(), m_wszStatus, m_wStatus, Skin_LoadProtoIcon(m_cache->getProto(), m_cache->getStatus()), 1, PluginConfig.g_hMenuFavorites);
-			break;
-		
-		case ID_FAVORITES_REMOVECONTACTFROMFAVORITES:
-			M.SetFavorite(m_hContact, 0);
-			DeleteMenu(PluginConfig.g_hMenuFavorites, m_hContact, MF_BYCOMMAND);
-			break;
-		}
 		break;
 
 	case IDC_SENDMENU:
@@ -414,7 +390,7 @@ LRESULT CMsgDialog::DM_MsgWindowCmdHandler(UINT cmd, WPARAM wParam, LPARAM lPara
 				SWP_NOMOVE | SWP_NOSIZE | SWP_NOCOPYBITS);
 			RedrawWindow(m_hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW | RDW_ALLCHILDREN);
 		}
-		SendMessage(m_pContainer->m_hwnd, DM_QUERYCLIENTAREA, 0, (LPARAM)&rc);
+		m_pContainer->QueryClientArea(rc);
 		Resize();
 		DM_ScrollToBottom(1, 1);
 		Utils::showDlgControl(m_hwnd, IDC_MULTISPLITTER, (m_sendMode & SMODE_MULTIPLE) ? SW_SHOW : SW_HIDE);
@@ -499,15 +475,12 @@ LRESULT CMsgDialog::DM_MsgWindowCmdHandler(UINT cmd, WPARAM wParam, LPARAM lPara
 
 	case IDC_SELFTYPING:
 		if (m_si == nullptr || m_si->iType == GCW_PRIVMESS) {
-			if (m_hContact) {
-				int iCurrentTypingMode = g_plugin.getByte(m_hContact, SRMSGSET_TYPING, g_plugin.getByte(SRMSGSET_TYPINGNEW, SRMSGDEFSET_TYPINGNEW));
-
-				if (m_nTypeMode == PROTOTYPE_SELFTYPING_ON && iCurrentTypingMode) {
-					DM_NotifyTyping(PROTOTYPE_SELFTYPING_OFF);
-					m_nTypeMode = PROTOTYPE_SELFTYPING_OFF;
-				}
-				g_plugin.setByte(m_hContact, SRMSGSET_TYPING, (BYTE)!iCurrentTypingMode);
+			int iCurrentTypingMode = g_plugin.getByte(m_hContact, SRMSGSET_TYPING, g_plugin.getByte(SRMSGSET_TYPINGNEW, SRMSGDEFSET_TYPINGNEW));
+			if (m_nTypeMode == PROTOTYPE_SELFTYPING_ON && iCurrentTypingMode) {
+				DM_NotifyTyping(PROTOTYPE_SELFTYPING_OFF);
+				m_nTypeMode = PROTOTYPE_SELFTYPING_OFF;
 			}
+			g_plugin.setByte(m_hContact, SRMSGSET_TYPING, (BYTE)!iCurrentTypingMode);
 		}
 		break;
 
@@ -523,11 +496,8 @@ LRESULT CMsgDialog::DM_MsgWindowCmdHandler(UINT cmd, WPARAM wParam, LPARAM lPara
 
 void CMsgDialog::DM_InitRichEdit()
 {
-	bool fIsChat = isChat();
-	COLORREF inputcharcolor;
-
 	char *szStreamOut = nullptr;
-	if (!fIsChat && GetWindowTextLength(m_message.GetHwnd()) > 0)
+	if (!isChat() && GetWindowTextLength(m_message.GetHwnd()) > 0)
 		szStreamOut = m_message.GetRichTextRtf();
 	SetWindowText(m_message.GetHwnd(), L"");
 
@@ -535,27 +505,27 @@ void CMsgDialog::DM_InitRichEdit()
 
 	m_message.SendMsg(EM_SETBKGNDCOLOR, 0, m_pContainer->m_theme.inputbg);
 
-	CHARFORMAT2A cf2;
-	memset(&cf2, 0, sizeof(CHARFORMAT2A));
+	CHARFORMAT2 cf2 = {};
 	cf2.cbSize = sizeof(cf2);
 
-	if (fIsChat) {
-		LOGFONTA lf;
-		LoadLogfont(FONTSECTION_IM, MSGFONTID_MESSAGEAREA, &lf, &inputcharcolor, FONTMODULE);
+	if (isChat()) {
+		LOGFONTW lf;
+		COLORREF inputcharcolor;
+		LoadMsgDlgFont(FONTSECTION_IM, MSGFONTID_MESSAGEAREA, &lf, &inputcharcolor);
 
 		cf2.dwMask = CFM_COLOR | CFM_FACE | CFM_CHARSET | CFM_SIZE | CFM_WEIGHT | CFM_ITALIC | CFM_BACKCOLOR;
 		cf2.crTextColor = inputcharcolor;
 		cf2.bCharSet = lf.lfCharSet;
 		cf2.crBackColor = m_pContainer->m_theme.inputbg;
-		strncpy(cf2.szFaceName, lf.lfFaceName, LF_FACESIZE);
+		wcsncpy_s(cf2.szFaceName, lf.lfFaceName, _TRUNCATE);
 		cf2.dwEffects = 0;
 		cf2.wWeight = (WORD)lf.lfWeight;
 		cf2.bPitchAndFamily = lf.lfPitchAndFamily;
 		cf2.yHeight = abs(lf.lfHeight) * 15;
 	}
 	else {
-		LOGFONTA lf = m_pContainer->m_theme.logFonts[MSGFONTID_MESSAGEAREA];
-		inputcharcolor = m_pContainer->m_theme.fontColors[MSGFONTID_MESSAGEAREA];
+		LOGFONTW lf = m_pContainer->m_theme.logFonts[MSGFONTID_MESSAGEAREA];
+		COLORREF inputcharcolor = m_pContainer->m_theme.fontColors[MSGFONTID_MESSAGEAREA];
 
 		for (auto &it : Utils::rtf_clrs)
 			if (it->clr == inputcharcolor)
@@ -564,7 +534,7 @@ void CMsgDialog::DM_InitRichEdit()
 		cf2.dwMask = CFM_COLOR | CFM_FACE | CFM_CHARSET | CFM_SIZE | CFM_WEIGHT | CFM_BOLD | CFM_ITALIC;
 		cf2.crTextColor = inputcharcolor;
 		cf2.bCharSet = lf.lfCharSet;
-		strncpy(cf2.szFaceName, lf.lfFaceName, LF_FACESIZE - 1);
+		wcsncpy_s(cf2.szFaceName, lf.lfFaceName, _TRUNCATE);
 		cf2.dwEffects = ((lf.lfWeight >= FW_BOLD) ? CFE_BOLD : 0) | (lf.lfItalic ? CFE_ITALIC : 0) | (lf.lfUnderline ? CFE_UNDERLINE : 0) | (lf.lfStrikeOut ? CFE_STRIKEOUT : 0);
 		cf2.wWeight = (WORD)lf.lfWeight;
 		cf2.bPitchAndFamily = lf.lfPitchAndFamily;
@@ -627,11 +597,6 @@ void CMsgDialog::DM_SetDBButtonStates()
 		char *szModule = buttonItem->szModule;
 		char *szSetting = buttonItem->szSetting;
 		if (buttonItem->dwFlags & BUTTON_DBACTIONONCONTACT || buttonItem->dwFlags & BUTTON_ISCONTACTDBACTION) {
-			if (m_hContact == 0) {
-				SendMessage(hWnd, BM_SETCHECK, BST_UNCHECKED, 0);
-				buttonItem = buttonItem->nextItem;
-				continue;
-			}
 			if (buttonItem->dwFlags & BUTTON_ISCONTACTDBACTION)
 				szModule = Proto_GetBaseAccountName(m_hContact);
 			hFinalContact = m_hContact;
@@ -743,8 +708,8 @@ HWND CMsgDialog::DM_CreateClist()
 	if (hItem)
 		SendMessage(hwndClist, CLM_SETCHECKMARK, (WPARAM)hItem, 1);
 
-	SendMessage(hwndClist, CLM_SETHIDEEMPTYGROUPS, db_get_b(0, "CList", "HideEmptyGroups", SETTING_USEGROUPS_DEFAULT), 0);
-	SendMessage(hwndClist, CLM_SETUSEGROUPS, db_get_b(0, "CList", "UseGroups", SETTING_USEGROUPS_DEFAULT), 0);
+	SendMessage(hwndClist, CLM_SETHIDEEMPTYGROUPS, Clist::HideEmptyGroups, 0);
+	SendMessage(hwndClist, CLM_SETUSEGROUPS, Clist::UseGroups, 0);
 	SendMessage(hwndClist, CLM_FIRST + 106, 0, 1);
 	SendMessage(hwndClist, CLM_AUTOREBUILD, 0, 0);
 	if (hwndClist)
@@ -836,9 +801,6 @@ void CMsgDialog::DM_ThemeChanged()
 
 void CMsgDialog::DM_NotifyTyping(int mode)
 {
-	if (!m_hContact)
-		return;
-
 	DeletePopupsForContact(m_hContact, PU_REMOVE_ON_TYPE);
 
 	const char *szProto = m_cache->getActiveProto();
@@ -1121,23 +1083,10 @@ void CMsgDialog::DM_EventAdded(WPARAM hContact, LPARAM lParam)
 	}
 	m_cache->updateStats(TSessionStats::UPDATE_WITH_LAST_RCV, 0);
 
-	if (hDbEvent != m_hDbEventFirst) {
-		if (!m_bScrollingDisabled)
-			StreamEvents(hDbEvent, 1, 1);
-		else {
-			if (m_iNextQueuedEvent >= m_iEventQueueSize) {
-				m_hQueuedEvents = (MEVENT*)mir_realloc(m_hQueuedEvents, (m_iEventQueueSize + 10) * sizeof(MEVENT));
-				m_iEventQueueSize += 10;
-			}
-			m_hQueuedEvents[m_iNextQueuedEvent++] = hDbEvent;
-
-			wchar_t szBuf[100];
-			mir_snwprintf(szBuf, TranslateT("Auto scrolling is disabled, %d message(s) queued (press F12 to enable it)"), m_iNextQueuedEvent);
-			SetDlgItemText(m_hwnd, IDC_LOGFROZENTEXT, szBuf);
-			RedrawWindow(GetDlgItem(m_hwnd, IDC_LOGFROZENTEXT), nullptr, nullptr, RDW_INVALIDATE);
-		}
-	}
-	else RemakeLog();
+	if (hDbEvent != m_hDbEventFirst || isChat())
+		StreamEvents(hDbEvent, 1, 1);
+	else
+		RemakeLog();
 
 	// handle tab flashing
 	if (!bDisableNotify && !bIsStatusChangeEvent)
@@ -1330,12 +1279,6 @@ void CMsgDialog::CheckStatusIconClick(POINT pt, const RECT &rc, int gap, int cod
 		else if (sid->dwId == MSG_ICON_UTN && code != NM_RCLICK && (!isChat() || m_si->iType == GCW_PRIVMESS)) {
 			SendMessage(m_pContainer->m_hwndActive, WM_COMMAND, IDC_SELFTYPING, 0);
 			InvalidateRect(m_pContainer->m_hwndStatus, nullptr, TRUE);
-		}
-		else if (sid->dwId == MSG_ICON_SESSION) {
-			if (code == NM_CLICK)
-				PostMessage(PluginConfig.g_hwndHotkeyHandler, DM_TRAYICONNOTIFY, 101, WM_LBUTTONUP);
-			else if (code == NM_RCLICK)
-				PostMessage(PluginConfig.g_hwndHotkeyHandler, DM_TRAYICONNOTIFY, 101, WM_RBUTTONUP);
 		}
 	}
 	else {

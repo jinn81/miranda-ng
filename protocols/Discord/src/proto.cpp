@@ -63,11 +63,16 @@ CDiscordProto::CDiscordProto(const char *proto_name, const wchar_t *username) :
 	CreateProtoService(PS_SETMYAVATAR, &CDiscordProto::SetMyAvatar);
 
 	CreateProtoService(PS_MENU_REQAUTH, &CDiscordProto::RequestFriendship);
+	CreateProtoService(PS_MENU_LOADHISTORY, &CDiscordProto::OnMenuLoadHistory);
+
+	CreateProtoService(PS_VOICE_CAPS, &CDiscordProto::VoiceCaps);
 
 	// Events
 	HookProtoEvent(ME_OPT_INITIALISE, &CDiscordProto::OnOptionsInit);
 	HookProtoEvent(ME_DB_EVENT_MARKED_READ, &CDiscordProto::OnDbEventRead);
 	HookProtoEvent(ME_PROTO_ACCLISTCHANGED, &CDiscordProto::OnAccountChanged);
+	
+	HookProtoEvent(PE_VOICE_CALL_STATE, &CDiscordProto::OnVoiceState);
 
 	// database
 	db_set_resident(m_szModuleName, "XStatusMsg");
@@ -86,6 +91,13 @@ CDiscordProto::CDiscordProto(const char *proto_name, const wchar_t *username) :
 	dbEventType.descr = Translate("Call ended");
 	dbEventType.eventIcon = g_plugin.getIconHandle(IDI_VOICE_ENDED);
 	DbEvent_RegisterType(&dbEventType);
+
+	// Groupchat initialization
+	GCREGISTER gcr = {};
+	gcr.dwFlags = GC_TYPNOTIF | GC_CHANMGR;
+	gcr.ptszDispName = m_tszUserName;
+	gcr.pszModule = m_szModuleName;
+	Chat_Register(&gcr);
 
 	// Network initialization
 	CMStringW descr;
@@ -140,12 +152,6 @@ void CDiscordProto::OnModulesLoaded()
 		else pNew->channelId = getId(hContact, DB_KEY_CHANNELID);
 	}
 
-	GCREGISTER gcr = {};
-	gcr.dwFlags = GC_TYPNOTIF | GC_CHANMGR;
-	gcr.ptszDispName = m_tszUserName;
-	gcr.pszModule = m_szModuleName;
-	Chat_Register(&gcr);
-
 	// Clist
 	Clist_GroupCreate(0, m_wszDefaultGroup);
 
@@ -153,6 +159,17 @@ void CDiscordProto::OnModulesLoaded()
 	HookProtoEvent(ME_GC_BUILDMENU, &CDiscordProto::GroupchatMenuHook);
 
 	InitMenus();
+
+	// Voice support
+	if (g_plugin.bVoiceService) {
+		VOICE_MODULE voice = {};
+		voice.cbSize = sizeof(voice);
+		voice.name = m_szModuleName;
+		voice.description = TranslateT("Discord voice call");
+		voice.icon = m_hProtoIcon;
+		voice.flags = VOICE_CAPS_CALL_CONTACT | VOICE_CAPS_VOICE;
+		CallService(MS_VOICESERVICE_REGISTER, (WPARAM)&voice, 0);
+	}
 }
 
 void CDiscordProto::OnShutdown()
@@ -164,6 +181,9 @@ void CDiscordProto::OnShutdown()
 
 	if (m_hGatewayConnection)
 		Netlib_Shutdown(m_hGatewayConnection);
+
+	if (g_plugin.bVoiceService)
+		CallService(MS_VOICESERVICE_UNREGISTER, (WPARAM)m_szModuleName, 0);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -180,7 +200,7 @@ INT_PTR CDiscordProto::GetCaps(int type, MCONTACT)
 	case PFLAGNUM_4:
 		return PF4_FORCEAUTH | PF4_NOCUSTOMAUTH | PF4_NOAUTHDENYREASON | PF4_SUPPORTTYPING | PF4_SUPPORTIDLE | PF4_AVATARS | PF4_IMSENDOFFLINE | PF4_SERVERMSGID | PF4_OFFLINEFILES;
 	case PFLAG_UNIQUEIDTEXT:
-		return (INT_PTR)Translate("User ID");
+		return (INT_PTR)TranslateT("User ID");
 	}
 	return 0;
 }
@@ -258,9 +278,9 @@ void CDiscordProto::SearchThread(void *param)
 	psr.firstName.w = L"";
 	psr.lastName.w = L"";
 	psr.id.w = L"";
-	ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_DATA, (HANDLE)param, (LPARAM)&psr);
+	ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_DATA, (HANDLE)1, (LPARAM)&psr);
 
-	ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SUCCESS, (HANDLE)param, 0);
+	ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_SUCCESS, (HANDLE)1, 0);
 	mir_free(param);
 }
 
@@ -278,9 +298,24 @@ HWND CDiscordProto::SearchAdvanced(HWND hwndDlg)
 	if (p == nullptr) // wrong user id
 		return nullptr;
 
-	p = mir_wstrdup(wszNick);
-	ForkThread(&CDiscordProto::SearchThread, p);
-	return (HWND)p;
+	ForkThread(&CDiscordProto::SearchThread, mir_wstrdup(wszNick));
+	return (HWND)1;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+// Basic search - by SnowFlake
+
+void CDiscordProto::OnReceiveUserinfo(NETLIBHTTPREQUEST *pReply, AsyncHttpRequest*)
+{
+	JsonReply root(pReply);
+	if (!root) {
+		ProtoBroadcastAck(0, ACKTYPE_SEARCH, ACKRESULT_FAILED, (HANDLE)1);
+		return;
+	}
+
+	auto &data = root.data();
+	CMStringW wszUserId(data["username"].as_mstring() + L"#" + data["discriminator"].as_mstring());
+	ForkThread(&CDiscordProto::SearchThread, wszUserId.Detach());
 }
 
 HANDLE CDiscordProto::SearchBasic(const wchar_t *wszId)
@@ -290,9 +325,7 @@ HANDLE CDiscordProto::SearchBasic(const wchar_t *wszId)
 
 	CMStringA szUrl = "/users/";
 	szUrl.AppendFormat(ptrA(mir_utf8encodeW(wszId)));
-	AsyncHttpRequest *pReq = new AsyncHttpRequest(this, REQUEST_GET, szUrl, &CDiscordProto::OnReceiveMyInfo);
-	pReq->pUserInfo = (void*)-1;
-	Push(pReq);
+	Push(new AsyncHttpRequest(this, REQUEST_GET, szUrl, &CDiscordProto::OnReceiveUserinfo));
 	return (HANDLE)1; // Success
 }
 
@@ -307,9 +340,7 @@ int CDiscordProto::AuthRequest(MCONTACT hContact, const wchar_t*)
 		return 1; // error
 
 	JSONNode root; root << WCHAR_PARAM("username", wszUsername) << INT_PARAM("discriminator", iDiscriminator);
-	AsyncHttpRequest *pReq = new AsyncHttpRequest(this, REQUEST_POST, "/users/@me/relationships", nullptr, &root);
-	pReq->pUserInfo = (void*)hContact;
-	Push(pReq);
+	Push(new AsyncHttpRequest(this, REQUEST_POST, "/users/@me/relationships", nullptr, &root));
 	return 0;
 }
 
@@ -327,9 +358,10 @@ int CDiscordProto::Authorize(MEVENT hDbEvent)
 	if (dbei.eventType != EVENTTYPE_AUTHREQUEST) return 1;
 	if (mir_strcmp(dbei.szModule, m_szModuleName)) return 1;
 
+	JSONNode root;
 	MCONTACT hContact = DbGetAuthEventContact(&dbei);
 	CMStringA szUrl(FORMAT, "/users/@me/relationships/%lld", getId(hContact, DB_KEY_ID));
-	Push(new AsyncHttpRequest(this, REQUEST_PUT, szUrl, nullptr));
+	Push(new AsyncHttpRequest(this, REQUEST_PUT, szUrl, nullptr, &root));
 	return 0;
 }
 
@@ -386,16 +418,10 @@ MCONTACT CDiscordProto::AddToList(int flags, PROTOSEARCHRESULT *psr)
 ////////////////////////////////////////////////////////////////////////////////////////
 // SendMsg
 
-void __cdecl CDiscordProto::SendMessageAckThread(void *param)
-{
-	Sleep(100);
-	ProtoBroadcastAck((UINT_PTR)param, ACKTYPE_MESSAGE, ACKRESULT_FAILED, (HANDLE)1, (LPARAM)TranslateT("Protocol is offline or user isn't authorized yet"));
-}
-
 int CDiscordProto::SendMsg(MCONTACT hContact, int /*flags*/, const char *pszSrc)
 {
 	if (!m_bOnline) {
-		ForkThread(&CDiscordProto::SendMessageAckThread, (void*)hContact);
+		ProtoBroadcastAsync(hContact, ACKTYPE_MESSAGE, ACKRESULT_FAILED, (HANDLE)1, (LPARAM)TranslateT("Protocol is offline or user isn't authorized yet"));
 		return 1;
 	}
 
@@ -488,13 +514,22 @@ int CDiscordProto::UserIsTyping(MCONTACT hContact, int type)
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
+void CDiscordProto::OnReceiveMarkRead(NETLIBHTTPREQUEST *pReply, AsyncHttpRequest *)
+{
+	JsonReply root(pReply);
+	if (root)
+		SaveToken(root.data());
+}
+
 void CDiscordProto::SendMarkRead()
 {
 	mir_cslock lck(csMarkReadQueue);
 	while (arMarkReadQueue.getCount()) {
 		CDiscordUser *pUser = arMarkReadQueue[0];
+		JSONNode payload; payload << CHAR_PARAM("token", m_szTempToken);
 		CMStringA szUrl(FORMAT, "/channels/%lld/messages/%lld/ack", pUser->channelId, pUser->lastMsgId);
-		Push(new AsyncHttpRequest(this, REQUEST_POST, szUrl, nullptr));
+		auto *pReq = new AsyncHttpRequest(this, REQUEST_POST, szUrl, &CDiscordProto::OnReceiveMarkRead, &payload);
+		Push(pReq);
 		arMarkReadQueue.remove(0);
 	}
 }

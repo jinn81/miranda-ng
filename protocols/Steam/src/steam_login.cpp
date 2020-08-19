@@ -38,6 +38,8 @@ void CSteamProto::Logout()
 		ptrA umqid(getStringA("UMQID"));
 		SendRequest(new LogoffRequest(token, umqid));
 	}
+
+	ProtoBroadcastAck(NULL, ACKTYPE_STATUS, ACKRESULT_SUCCESS, (HANDLE)m_iStatus, m_iStatus);
 }
 
 void CSteamProto::OnGotRsaKey(const JSONNode &root, void *)
@@ -117,7 +119,7 @@ void CSteamProto::OnGotCaptcha(const HttpResponse &response, void *arg)
 	}
 
 	CSteamCaptchaDialog captchaDialog(this, response.Content, response.Content.size());
-	if (captchaDialog.DoModal() != DIALOG_RESULT_OK) {
+	if (!captchaDialog.DoModal()) {
 		DeleteAuthSettings();
 		SetStatus(ID_STATUS_OFFLINE);
 		return;
@@ -189,7 +191,7 @@ void CSteamProto::OnAuthorizationError(const JSONNode &root)
 		delSetting("TwoFactorCode");
 
 		CSteamTwoFactorDialog twoFactorDialog(this);
-		if (twoFactorDialog.DoModal() != DIALOG_RESULT_OK) {
+		if (!twoFactorDialog.DoModal()) {
 			DeleteAuthSettings();
 			SetStatus(ID_STATUS_OFFLINE);
 			return;
@@ -217,8 +219,11 @@ void CSteamProto::OnAuthorizationError(const JSONNode &root)
 		if (domain.find("://") == std::string::npos)
 			domain = "http://" + domain;
 
+		if (m_hwndGuard != nullptr)
+			return;
+
 		CSteamGuardDialog guardDialog(this, domain.c_str());
-		if (guardDialog.DoModal() != DIALOG_RESULT_OK) {
+		if (!guardDialog.DoModal()) {
 			DeleteAuthSettings();
 			SetStatus(ID_STATUS_OFFLINE);
 			return;
@@ -312,7 +317,6 @@ void CSteamProto::HandleTokenExpired()
 	isLoginAgain = true;
 
 	Login();
-	return;
 }
 
 void CSteamProto::OnLoggedOn(const HttpResponse &response, void *)

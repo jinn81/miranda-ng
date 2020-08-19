@@ -239,8 +239,6 @@ public:
 		m_btnOk(this, IDOK)
 	{
 		SetParent(hwndParent);
-		m_autoClose = CLOSE_ON_CANCEL;
-		m_btnOk.OnClick = Callback(this, &CJabberDlgRegister::btnOk_OnClick);
 	}
 
 	bool OnInitDialog() override
@@ -250,43 +248,45 @@ public:
 		return true;
 	}
 
-	INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam) override
-	{
-		switch (msg) {
-		case WM_JABBER_REGDLG_UPDATE:	// wParam=progress (0-100), lparam=status string
-			if ((wchar_t*)lParam == nullptr)
-				SetDlgItemTextW(m_hwnd, IDC_REG_STATUS, TranslateT("No message"));
-			else
-				SetDlgItemTextW(m_hwnd, IDC_REG_STATUS, (wchar_t*)lParam);
-
-			SendDlgItemMessage(m_hwnd, IDC_PROGRESS_REG, PBM_SETPOS, wParam, 0);
-			if (wParam >= 100)
-				m_btnOk.SetText(TranslateT("Close"));
-			else
-				SetFocus(GetDlgItem(m_hwnd, IDC_PROGRESS_REG));
-
-			return TRUE;
-		}
-
-		return CSuper::DlgProc(msg, wParam, lParam);
-	}
-
-	void btnOk_OnClick(CCtrlButton*)
+	bool OnApply() override
 	{
 		if (m_bProcessStarted) {
 			Close();
-			return;
+			return true;
 		}
 
 		ShowWindow(GetDlgItem(m_hwnd, IDC_PROGRESS_REG), SW_SHOW);
 
-		m_regInfo->reg_hwndDlg = m_hwnd;
-		m_proto->ForkThread((CJabberProto::MyThreadFunc)&CJabberProto::ServerThread, m_regInfo);
+		m_regInfo->pDlg = this;
+		m_proto->ForkThread((CJabberProto::MyThreadFunc) & CJabberProto::ServerThread, m_regInfo);
 
 		m_btnOk.SetText(TranslateT("Cancel"));
 		m_bProcessStarted = true;
+		return false;
+	}
+
+	void OnDestroy() override
+	{
+		m_regInfo->pDlg = nullptr;
+	}
+
+	void Update(int progress, const wchar_t *pwszText)
+	{
+		SetDlgItemTextW(m_hwnd, IDC_REG_STATUS, pwszText);
+		SendDlgItemMessageW(m_hwnd, IDC_PROGRESS_REG, PBM_SETPOS, progress, 0);
+
+		if (progress >= 100)
+			m_btnOk.SetText(TranslateT("Close"));
+		else
+			SetFocus(GetDlgItem(m_hwnd, IDC_PROGRESS_REG));
 	}
 };
+
+void JABBER_CONN_DATA::SetProgress(int progress, const wchar_t *pwszText)
+{
+	if (pDlg)
+		pDlg->Update(progress, pwszText);
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // JabberOptDlgProc - main options dialog procedure
@@ -349,7 +349,7 @@ class CDlgOptAccount : public CJabberDlgBase
 	CCtrlEdit		m_txtManualPort;
 	CCtrlCheck		m_chkKeepAlive;
 	CCtrlCheck		m_chkAutoDeleteContacts;
-	CCtrlCombo		m_cbLocale;
+	CCtrlCombo		m_cbLocale, m_cbMam;
 	CCtrlButton		m_btnRegister;
 	CCtrlButton		m_btnUnregister;
 	CCtrlButton		m_btnChangePassword;
@@ -365,6 +365,7 @@ public:
 		m_cbResource(this, IDC_COMBO_RESOURCE),
 		m_chkUseHostnameAsResource(this, IDC_HOSTNAME_AS_RESOURCE),
 		m_chkUseDomainLogin(this, IDC_USEDOMAINLOGIN),
+		m_cbMam(this, IDC_MAM_MODE),
 		m_cbServer(this, IDC_EDIT_LOGIN_SERVER),
 		m_txtPort(this, IDC_PORT),
 		m_chkUseSsl(this, IDC_USE_SSL),
@@ -430,6 +431,14 @@ protected:
 		for (auto &it : szResources)
 			m_cbResource.AddString(it);
 
+
+		// fill MAM modes
+		wchar_t *szMamModes[] = { LPGENW("Never"), LPGENW("Roster"), LPGENW("Always") };
+		for (auto &it : szMamModes)
+			m_cbMam.AddString(it, int(&it - szMamModes));
+		m_cbMam.SetCurSel(m_proto->m_iMamMode);
+		m_cbMam.Enable(m_proto->m_bMamPrefsAvailable);
+
 		// append computer name to the resource list
 		wchar_t szCompName[MAX_COMPUTERNAME_LENGTH + 1];
 		DWORD dwCompNameLength = MAX_COMPUTERNAME_LENGTH;
@@ -489,6 +498,9 @@ protected:
 			}
 		}
 
+		if (m_cbMam.Enabled() && m_cbMam.GetCurSel() != m_proto->m_iMamMode)
+			m_proto->MamSetMode(m_cbMam.GetCurSel());
+
 		sttStoreJidFromUI(m_proto, m_txtUsername, m_cbServer);
 
 		if (m_proto->m_bJabberOnline) {
@@ -507,22 +519,23 @@ protected:
 
 	void OnChange(CCtrlBase*)
 	{
-		if (m_initialized)
+		if (m_bInitialized)
 			CheckRegistration();
+	}
+
+	void OnProtoRefresh(WPARAM, LPARAM lParam) override
+	{
+		RefreshServers((TiXmlElement *)lParam);
 	}
 
 	INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam) override
 	{
-		switch (msg) {
-		case WM_ACTIVATE:
-			m_chkUseTls.Enable(!m_proto->m_bDisable3920auth && (m_proto->m_bUseSSL ? false : true));
-			if (m_proto->m_bDisable3920auth) m_chkUseTls.SetState(BST_UNCHECKED);
-			break;
-
-		case WM_JABBER_REFRESH:
-			RefreshServers((TiXmlElement*)lParam);
-			break;
+		if (msg == WM_ACTIVATE) {
+			m_chkUseTls.Enable(!m_proto->m_bDisable3920auth && !m_proto->m_bUseSSL);
+			if (m_proto->m_bDisable3920auth)
+				m_chkUseTls.SetState(BST_UNCHECKED);
 		}
+
 		return CSuper::DlgProc(msg, wParam, lParam);
 	}
 
@@ -718,14 +731,14 @@ private:
 				TiXmlDocument doc;
 				if (0 == doc.Parse(result->pData)) {
 					TiXmlElement *queryNode = doc.FirstChildElement("query");
-					SendMessage(hwnd, WM_JABBER_REFRESH, 0, (LPARAM)queryNode);
+					SendMessage(hwnd, WM_PROTO_REFRESH, 0, (LPARAM)queryNode);
 					bIsError = false;
 				}
 			}
 		}
 
 		if (bIsError)
-			SendMessage(hwnd, WM_JABBER_REFRESH, 0, 0);
+			SendMessage(hwnd, WM_PROTO_REFRESH, 0, 0);
 	}
 };
 
@@ -741,7 +754,7 @@ class CDlgOptAdvanced : public CJabberDlgBase
 	CCtrlEdit		m_txtDirect;
 	CCtrlTreeOpts	m_otvOptions;
 
-	BYTE m_oldFrameValue;
+	bool m_oldFrameValue;
 
 public:
 	CDlgOptAdvanced(CJabberProto *proto) :
@@ -768,8 +781,10 @@ public:
 		m_otvOptions.AddOption(LPGENW("Messaging") L"/" LPGENW("Enable user activity receiving"), m_proto->m_bEnableUserActivity);
 		m_otvOptions.AddOption(LPGENW("Messaging") L"/" LPGENW("Receive notes"), m_proto->m_bAcceptNotes);
 		m_otvOptions.AddOption(LPGENW("Messaging") L"/" LPGENW("Automatically save received notes"), m_proto->m_bAutosaveNotes);
+		m_otvOptions.AddOption(LPGENW("Messaging") L"/" LPGENW("Inline pictures in messages (XEP-0231)"), m_proto->m_bInlinePictures);
+		m_otvOptions.AddOption(LPGENW("Messaging") L"/" LPGENW("Enable chat states sending (XEP-0085)"), m_proto->m_bEnableChatStates);
 		m_otvOptions.AddOption(LPGENW("Messaging") L"/" LPGENW("Enable server-side history (XEP-0136)"), m_proto->m_bEnableMsgArchive);
-		m_otvOptions.AddOption(LPGENW("Messaging") L"/" LPGENW("Receive conversations from other devices (XEP-0280)"), m_proto->m_bEnableCarbons);
+		m_otvOptions.AddOption(LPGENW("Messaging") L"/" LPGENW("Enable carbon copies (XEP-0280)"), m_proto->m_bEnableCarbons);
 		m_otvOptions.AddOption(LPGENW("Messaging") L"/" LPGENW("Use Stream Management (XEP-0198) if possible (Testing)"), m_proto->m_bEnableStreamMgmt);
 
 		m_otvOptions.AddOption(LPGENW("Server options") L"/" LPGENW("Disable SASL authentication (for old servers)"), m_proto->m_bDisable3920auth);
@@ -782,7 +797,8 @@ public:
 		m_otvOptions.AddOption(LPGENW("Other") L"/" LPGENW("Fix incorrect timestamps in incoming messages"), m_proto->m_bFixIncorrectTimestamps);
 		m_otvOptions.AddOption(LPGENW("Other") L"/" LPGENW("Disable frame"), m_proto->m_bDisableFrame);
 		m_otvOptions.AddOption(LPGENW("Other") L"/" LPGENW("Enable XMPP link processing (requires AssocMgr)"), m_proto->m_bProcessXMPPLinks);
-		m_otvOptions.AddOption(LPGENW("Other") L"/" LPGENW("Keep contacts assigned to local groups (ignore roster group)"), m_proto->m_bIgnoreRosterGroups);
+		m_otvOptions.AddOption(LPGENW("Other") L"/" LPGENW("Embrace picture URLs with [img]"), m_proto->m_bEmbraceUrls);
+		m_otvOptions.AddOption(LPGENW("Other") L"/" LPGENW("Ignore server roster (groups and nick names)"), m_proto->m_bIgnoreRoster);
 
 		m_otvOptions.AddOption(LPGENW("Security") L"/" LPGENW("Allow servers to request version (XEP-0092)"), m_proto->m_bAllowVersionRequests);
 		m_otvOptions.AddOption(LPGENW("Security") L"/" LPGENW("Show information about operating system in version replies"), m_proto->m_bShowOSVersion);
@@ -829,7 +845,7 @@ public:
 			m_proto->m_omemo.init();
 		else
 			m_proto->m_omemo.deinit();
-		m_proto->m_clientCapsManager.UpdateFeatHash();
+		m_proto->UpdateFeatHash();
 		m_proto->SendPresence(m_proto->m_iStatus, true);
 		return true;
 	}
@@ -878,7 +894,7 @@ public:
 		m_otvOptions.AddOption(LPGENW("General") L"/" LPGENW("Autoaccept multiuser chat invitations"),   m_proto->m_bAutoAcceptMUC);
 		m_otvOptions.AddOption(LPGENW("General") L"/" LPGENW("Automatically join bookmarks on login"),   m_proto->m_bAutoJoinBookmarks);
 		m_otvOptions.AddOption(LPGENW("General") L"/" LPGENW("Automatically join conferences on login"), m_proto->m_bAutoJoinConferences);
-		m_otvOptions.AddOption(LPGENW("General") L"/" LPGENW("Do not open chat windows on creation"),      m_proto->m_bAutoJoinHidden);
+		m_otvOptions.AddOption(LPGENW("General") L"/" LPGENW("Do not open chat windows on creation"),    m_proto->m_bAutoJoinHidden);
 		m_otvOptions.AddOption(LPGENW("General") L"/" LPGENW("Do not show multiuser chat invitations"),  m_proto->m_bIgnoreMUCInvites);
 		m_otvOptions.AddOption(LPGENW("Log events") L"/" LPGENW("Ban notifications"),                    m_proto->m_bGcLogBans);
 		m_otvOptions.AddOption(LPGENW("Log events") L"/" LPGENW("Room configuration changes"),           m_proto->m_bGcLogConfig);
@@ -1110,13 +1126,13 @@ protected:
 		// clear saved password
 		m_proto->m_savedPassword = nullptr;
 
-		BOOL bUseHostnameAsResource = FALSE;
+		bool bUseHostnameAsResource = false;
 		wchar_t szCompName[MAX_COMPUTERNAME_LENGTH + 1], szResource[MAX_COMPUTERNAME_LENGTH + 1];
 		DWORD dwCompNameLength = MAX_COMPUTERNAME_LENGTH;
 		if (GetComputerName(szCompName, &dwCompNameLength)) {
 			m_cbResource.GetText(szResource, _countof(szResource));
 			if (!mir_wstrcmp(szCompName, szResource))
-				bUseHostnameAsResource = TRUE;
+				bUseHostnameAsResource = true;
 		}
 		m_proto->m_bHostNameAsResource = bUseHostnameAsResource;
 
@@ -1129,7 +1145,7 @@ protected:
 
 		switch (m_cbType.GetItemData(m_cbType.GetCurSel())) {
 		case ACC_PUBLIC:
-			m_proto->m_bUseSSL = m_proto->m_bUseTLS = FALSE;
+			m_proto->m_bUseSSL = m_proto->m_bUseTLS = false;
 			break;
 
 		case ACC_GTALK:
@@ -1137,27 +1153,27 @@ protected:
 			{
 				int port = m_txtPort.GetInt();
 				if (port == 443 || port == 5223) {
-					m_proto->m_bUseSSL = TRUE;
-					m_proto->m_bUseTLS = FALSE;
+					m_proto->m_bUseSSL = true;
+					m_proto->m_bUseTLS = false;
 				}
 				else if (port == 5222) {
-					m_proto->m_bUseSSL = FALSE;
-					m_proto->m_bUseTLS = TRUE;
+					m_proto->m_bUseSSL = false;
+					m_proto->m_bUseTLS = true;
 				}
 			}
 			break;
 
 		case ACC_OK:
-			m_proto->m_bIgnoreRosterGroups = TRUE;
-			m_proto->m_bUseSSL = FALSE;
-			m_proto->m_bUseTLS = TRUE;
+			m_proto->m_bIgnoreRoster = true;
+			m_proto->m_bUseSSL = false;
+			m_proto->m_bUseTLS = true;
 
 		case ACC_TLS:
 		case ACC_HIPCHAT:
 		case ACC_LJTALK:
 		case ACC_SMS:
-			m_proto->m_bUseSSL = FALSE;
-			m_proto->m_bUseTLS = TRUE;
+			m_proto->m_bUseSSL = false;
+			m_proto->m_bUseTLS = true;
 			break;
 
 		case ACC_LOL_EN:
@@ -1165,13 +1181,13 @@ protected:
 		case ACC_LOL_OC:
 		case ACC_LOL_US:
 			m_proto->setDword("Priority", -2);
-			m_proto->m_bUseSSL = TRUE;
-			m_proto->m_bUseTLS = FALSE;
+			m_proto->m_bUseSSL = true;
+			m_proto->m_bUseTLS = false;
 			break;
 
 		case ACC_SSL:
-			m_proto->m_bUseSSL = TRUE;
-			m_proto->m_bUseTLS = FALSE;
+			m_proto->m_bUseSSL = true;
+			m_proto->m_bUseTLS = false;
 			break;
 		}
 
@@ -1182,13 +1198,13 @@ protected:
 		m_txtManualHost.GetTextA(manualServer, _countof(manualServer));
 
 		if ((m_chkManualHost.GetState() == BST_CHECKED) && mir_strcmp(server, manualServer)) {
-			m_proto->m_bManualConnect = TRUE;
+			m_proto->m_bManualConnect = true;
 			m_proto->setString("ManualHost", manualServer);
 			m_proto->setWord("ManualPort", m_txtPort.GetInt());
 			m_proto->setWord("Port", m_txtPort.GetInt());
 		}
 		else {
-			m_proto->m_bManualConnect = FALSE;
+			m_proto->m_bManualConnect = false;
 			m_proto->delSetting("ManualHost");
 			m_proto->delSetting("ManualPort");
 			m_proto->setWord("Port", m_txtPort.GetInt());
@@ -1211,18 +1227,13 @@ protected:
 
 	void OnChange(CCtrlBase*)
 	{
-		if (m_initialized)
+		if (m_bInitialized)
 			CheckRegistration();
 	}
 
-	INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam) override
+	void OnProtoRefresh(WPARAM, LPARAM lParam) override
 	{
-		switch (msg) {
-		case WM_JABBER_REFRESH:
-			RefreshServers((TiXmlElement*)lParam);
-			break;
-		}
-		return CSuper::DlgProc(msg, wParam, lParam);
+		RefreshServers((TiXmlElement*)lParam);
 	}
 
 private:
@@ -1586,7 +1597,7 @@ private:
 				if (0 == doc.Parse(result->pData)) {
 					const TiXmlElement *queryNode = doc.FirstChildElement("query");
 					if (queryNode && IsWindow(hwnd)) {
-						SendMessage(hwnd, WM_JABBER_REFRESH, 0, (LPARAM)queryNode);
+						SendMessage(hwnd, WM_PROTO_REFRESH, 0, (LPARAM)queryNode);
 						bIsError = false;
 					}
 				}
@@ -1594,7 +1605,7 @@ private:
 		}
 
 		if (bIsError)
-			SendMessage(hwnd, WM_JABBER_REFRESH, 0, 0);
+			SendMessage(hwnd, WM_PROTO_REFRESH, 0, 0);
 	}
 };
 

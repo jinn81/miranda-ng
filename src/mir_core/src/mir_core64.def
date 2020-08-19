@@ -1,6 +1,7 @@
 LIBRARY mir_core.mir
 
 EXPORTS
+?g_pCurrDb@@3PEAVMDatabaseCommon@@EA @1 NONAME
 CallFunctionAsync               @5
 CallPluginEventHook             @7
 CallService                     @8
@@ -646,7 +647,6 @@ mir_wstrcmpi                  @280
 ?GetItemText@CCtrlListView@@QEAAXHHPEA_WH@Z @833 NONAME
 ?GetItemType@CCtrlClc@@QEAAHPEAX@Z @834 NONAME
 ?GetLastVisible@CCtrlTreeView@@QEAAPEAU_TREEITEM@@XZ @835 NONAME
-?GetLefrMargin@CCtrlClc@@QEAAHXZ @836 NONAME
 ?GetLineColor@CCtrlTreeView@@QEAAKXZ @837 NONAME
 ?GetNextItem@CCtrlClc@@QEAAPEAXPEAXK@Z @838 NONAME
 ?GetNextItem@CCtrlListView@@QEAAHHI@Z @839 NONAME
@@ -681,7 +681,6 @@ mir_wstrcmpi                  @280
 ?GetTextBkColor@CCtrlListView@@QEAAKXZ @869 NONAME
 ?GetTextColor@CCtrlListView@@QEAAKXZ @870 NONAME
 ?GetTextColor@CCtrlTreeView@@QEAAKXZ @871 NONAME
-?GetTextColor@CCtrlClc@@QEAAKH@Z @872 NONAME
 ?GetTileInfo@CCtrlListView@@QEAAXPEAUtagLVTILEINFO@@@Z @873 NONAME
 ?GetTileViewInfo@CCtrlListView@@QEAAXPEAUtagLVTILEVIEWINFO@@@Z @874 NONAME
 ?GetToolTips@CCtrlListView@@QEAAPEAUHWND__@@XZ @875 NONAME
@@ -776,7 +775,6 @@ mir_wstrcmpi                  @280
 ?SelectString@CCtrlCombo@@QEAAHPEB_W@Z @969 NONAME
 ?SelectString@CCtrlListBox@@QEAAHPEB_W@Z @970 NONAME
 ?SendMsg@CCtrlBase@@QEBA_JI_K_J@Z @971 NONAME
-?SetBkBitmap@CCtrlClc@@QEAAXKPEAUHBITMAP__@@@Z @972 NONAME
 ?SetBkColor@CCtrlClc@@QEAAXK@Z @973 NONAME
 ?SetBkColor@CCtrlListView@@QEAAHK@Z @974 NONAME
 ?SetBkColor@CCtrlTreeView@@QEAAKK@Z @975 NONAME
@@ -797,7 +795,6 @@ mir_wstrcmpi                  @280
 ?SetExtraImage@CCtrlClc@@QEAAXPEAXHH@Z @990 NONAME
 ?SetExtraImageList@CCtrlClc@@QEAAXPEAU_IMAGELIST@@@Z @991 NONAME
 ?SetFont@CCtrlClc@@QEAAXHPEAX_N@Z @992 NONAME
-?SetGreyoutFlags@CCtrlClc@@QEAAXK@Z @993 NONAME
 ?SetGroupInfo@CCtrlListView@@QEAAHHPEAUtagLVGROUP@@@Z @994 NONAME
 ?SetGroupMetrics@CCtrlListView@@QEAAXPEAUtagLVGROUPMETRICS@@@Z @995 NONAME
 ?SetHideEmptyGroups@CCtrlClc@@QEAAX_N@Z @996 NONAME
@@ -808,7 +805,6 @@ mir_wstrcmpi                  @280
 ?SetIconSpacing@CCtrlListView@@QEAAKHH@Z @1001 NONAME
 ?SetImageList@CCtrlListView@@QEAAPEAU_IMAGELIST@@PEAU2@H@Z @1002 NONAME
 ?SetImageList@CCtrlTreeView@@QEAAXPEAU_IMAGELIST@@H@Z @1003 NONAME
-?SetIndent@CCtrlClc@@QEAAXH@Z @1004 NONAME
 ?SetIndent@CCtrlTreeView@@QEAAXH@Z @1005 NONAME
 ?SetInfoTip@CCtrlListView@@QEAAHPEAUtagLVSETINFOTIP@@@Z @1006 NONAME
 ?SetInsertMark@CCtrlListView@@QEAAHPEAULVINSERTMARK@@@Z @1007 NONAME
@@ -830,7 +826,6 @@ mir_wstrcmpi                  @280
 ?SetItemState@CCtrlTreeView@@QEAAXPEAU_TREEITEM@@KK@Z @1023 NONAME
 ?SetItemText@CCtrlClc@@QEAAXPEAXPEAD@Z @1024 NONAME
 ?SetItemText@CCtrlListView@@QEAAXHHPEB_W@Z @1025 NONAME
-?SetLeftMargin@CCtrlClc@@QEAAXH@Z @1026 NONAME
 ?SetLineColor@CCtrlTreeView@@QEAAKK@Z @1027 NONAME
 ?SetOfflineModes@CCtrlClc@@QEAAXK@Z @1028 NONAME
 ?SetOutlineColor@CCtrlListView@@QEAAKK@Z @1029 NONAME
@@ -842,7 +837,6 @@ mir_wstrcmpi                  @280
 ?SetText@CCtrlBase@@QEAAXPEB_W@Z @1036 NONAME
 ?SetTextA@CCtrlBase@@QEAAXPEBD@Z @1037 NONAME
 ?SetTextBkColor@CCtrlListView@@QEAAHK@Z @1038 NONAME
-?SetTextColor@CCtrlClc@@QEAAXHK@Z @1039 NONAME
 ?SetTextColor@CCtrlListView@@QEAAHK@Z @1040 NONAME
 ?SetTextColor@CCtrlTreeView@@QEAAKK@Z @1041 NONAME
 ?SetTileInfo@CCtrlListView@@QEAAHPEAUtagLVTILEINFO@@@Z @1042 NONAME
@@ -960,21 +954,21 @@ db_delete_module @1161
 ?SetMaxLength@CCtrlEdit@@QEAAXI@Z @1167 NONAME
 db_get_current @1169
 CallFunctionSync @1170
-??0CProgress@@QEAA@PEAVCDlgBase@@H@Z @1172 NONAME
+??0CCtrlProgress@@QEAA@PEAVCDlgBase@@H@Z @1172 NONAME
 ??0CTimer@@QEAA@AEBV0@@Z @1173 NONAME
 ??0CTimer@@QEAA@PEAVCDlgBase@@_K@Z @1174 NONAME
-??1CProgress@@UEAA@XZ @1175 NONAME
+??1CCtrlProgress@@UEAA@XZ @1175 NONAME
 ??4CTimer@@QEAAAEAV0@AEBV0@@Z @1177 NONAME
-??_7CProgress@@6B@ @1178 NONAME
+??_7CCtrlProgress@@6B@ @1178 NONAME
 ??_7CTimer@@6B@ @1179 NONAME
 ?FindTimer@CDlgBase@@AEAAPEAVCTimer@@H@Z @1180 NONAME
 ?GetEventId@CTimer@@QEBA_KXZ @1181 NONAME
-?Move@CProgress@@QEAAGG@Z @1182 NONAME
+?Move@CCtrlProgress@@QEAAGG@Z @1182 NONAME
 ?OnTimer@CDlgBase@@MEAAXPEAVCTimer@@@Z @1183 NONAME
 ?OnTimer@CTimer@@UEAAHXZ @1184 NONAME
-?SetPosition@CProgress@@QEAAXG@Z @1185 NONAME
-?SetRange@CProgress@@QEAAXGG@Z @1186 NONAME
-?SetStep@CProgress@@QEAAXG@Z @1187 NONAME
+?SetPosition@CCtrlProgress@@QEAAXG@Z @1185 NONAME
+?SetRange@CCtrlProgress@@QEAAXGG@Z @1186 NONAME
+?SetStep@CCtrlProgress@@QEAAXG@Z @1187 NONAME
 ?Start@CTimer@@QEAAXH@Z @1188 NONAME
 ?Stop@CTimer@@QEAAXXZ @1189 NONAME
 ?AddTimer@CDlgBase@@IEAAXPEAVCTimer@@@Z @1190 NONAME
@@ -1042,14 +1036,13 @@ IsTerminalDisconnected @1245
 ??1CCtrlLabel@@UEAA@XZ @1257 NONAME
 ??_7CCtrlLabel@@6B@ @1258 NONAME
 CallObjectEventHook @1259
-?db_get_sm@@YA?AV?$CMStringT@DV?$ChTraitsCRT@D@@@@IPEBD0@Z @1260 NONAME
-?db_get_wsm@@YA?AV?$CMStringT@_WV?$ChTraitsCRT@_W@@@@IPEBD0@Z @1261 NONAME
+?db_get_sm@@YA?AV?$CMStringT@DV?$ChTraitsCRT@D@@@@IPEBD00@Z @1682 NONAME
+?db_get_wsm@@YA?AV?$CMStringT@_WV?$ChTraitsCRT@_W@@@@IPEBD0PEB_W@Z @1683 NONAME
 ?CreateLink@CDlgBase@@IEAAXAEAVCCtrlData@@PEBDEK@Z @1262 NONAME
 ?CreateLink@CDlgBase@@IEAAXAEAVCCtrlData@@PEBDPEA_W@Z @1263 NONAME
 ?CheckRowCount@CCtrlPages@@AEAAXXZ @1264 NONAME
 ?VerifyControls@CDlgBase@@AEAA_NP8CCtrlBase@@EAA_NXZ@Z @1265 NONAME
 db_event_getById @1266
-db_event_setId @1267
 db_event_edit @1268
 ??0StrPair@tinyxml2@@QEAA@XZ @1269 NONAME
 ??0XMLAttribute@tinyxml2@@AEAA@XZ @1270 NONAME
@@ -1186,7 +1179,7 @@ db_event_edit @1268
 ?LinkEndChild@XMLNode@tinyxml2@@QEAAPEAV12@PEAV12@@Z @1401 NONAME
 ?LoadFile@XMLDocument@tinyxml2@@QEAA?AW4XMLError@2@PEAU_iobuf@@@Z @1402 NONAME
 ?LoadFile@XMLDocument@tinyxml2@@QEAA?AW4XMLError@2@PEBD@Z @1403 NONAME
-?MarkInUse@XMLDocument@tinyxml2@@QEAAXPEAVXMLNode@2@@Z @1404 NONAME
+?MarkInUse@XMLDocument@tinyxml2@@QEAAXQEBVXMLNode@2@@Z @1404 NONAME
 ?Name@XMLAttribute@tinyxml2@@QEBAPEBDXZ @1405 NONAME
 ?Name@XMLElement@tinyxml2@@QEBAPEBDXZ @1406 NONAME
 ?NewComment@XMLDocument@tinyxml2@@QEAAPEAVXMLComment@2@PEBD@Z @1407 NONAME
@@ -1329,7 +1322,7 @@ db_event_edit @1268
 ?ShallowEqual@XMLElement@tinyxml2@@UEBA_NPEBVXMLNode@2@@Z @1544 NONAME
 ?ShallowEqual@XMLText@tinyxml2@@UEBA_NPEBVXMLNode@2@@Z @1545 NONAME
 ?ShallowEqual@XMLUnknown@tinyxml2@@UEBA_NPEBVXMLNode@2@@Z @1546 NONAME
-?SkipWhiteSpace@XMLUtil@tinyxml2@@SAPEADPEADPEAH@Z @1547 NONAME
+?SkipWhiteSpace@XMLUtil@tinyxml2@@SAPEADQEADPEAH@Z @1547 NONAME
 ?SkipWhiteSpace@XMLUtil@tinyxml2@@SAPEBDPEBDPEAH@Z @1548 NONAME
 ?StringEqual@XMLUtil@tinyxml2@@SA_NPEBD0H@Z @1549 NONAME
 ?ToBool@XMLUtil@tinyxml2@@SA_NPEBDPEA_N@Z @1550 NONAME
@@ -1459,3 +1452,22 @@ XmlGetChildText @1645
 ?Unlock@mir_cs@@QEAAXXZ @1674 NONAME
 ?StartSafe@CTimer@@QEAAXH@Z @1675 NONAME
 ?StopSafe@CTimer@@QEAAXXZ @1676 NONAME
+?InsertNewChildElement@XMLElement@tinyxml2@@QEAAPEAV12@PEBD@Z @1677 NONAME
+?InsertNewComment@XMLElement@tinyxml2@@QEAAPEAVXMLComment@2@PEBD@Z @1678 NONAME
+?InsertNewDeclaration@XMLElement@tinyxml2@@QEAAPEAVXMLDeclaration@2@PEBD@Z @1679 NONAME
+?InsertNewText@XMLElement@tinyxml2@@QEAAPEAVXMLText@2@PEBD@Z @1680 NONAME
+?InsertNewUnknown@XMLElement@tinyxml2@@QEAAPEAVXMLUnknown@2@PEBD@Z @1681 NONAME
+??1EventCursor@DB@@UEAA@XZ @1684 NONAME
+??0EventCursor@DB@@QEAA@AEBV01@@Z @1685 NONAME
+??0EventCursor@DB@@QEAA@I@Z @1686 NONAME
+??_7EventCursor@DB@@6B@ @1687 NONAME
+?Events@DB@@YAPEAVEventCursor@1@II@Z @1688 NONAME
+?EventsRev@DB@@YAPEAVEventCursor@1@II@Z @1689 NONAME
+?begin@EventCursor@DB@@QEAAIXZ @1690 NONAME
+?end@EventCursor@DB@@QEAAIXZ @1691 NONAME
+TimeZone_GetSystemTime @1692
+??0ECPTR@DB@@QEAA@PEAVEventCursor@1@@Z @1693 NONAME
+??1ECPTR@DB@@QEAA@XZ @1694 NONAME
+??4EventCursor@DB@@QEAAAEAV01@AEBV01@@Z @1695 NONAME
+?DeleteEvent@ECPTR@DB@@QEAAXXZ @1696 NONAME
+?FetchNext@ECPTR@DB@@QEAAIXZ @1697 NONAME

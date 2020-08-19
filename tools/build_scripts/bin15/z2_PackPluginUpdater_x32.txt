@@ -1,5 +1,6 @@
 hashes.txt
 fixme.cmd
+libmdbx.mir
 mdbx_chk.exe
 mdbx_load.exe
 mdbx_dump.exe
@@ -7,7 +8,6 @@ miranda32.exe
 pu_stub.exe
 sendlog.exe
 sendlogwin.exe
-
 
 Plugins\actman.dll
 Plugins\addcontactplus.dll
@@ -41,6 +41,7 @@ Plugins\cryptopp.dll
 Plugins\cslist.dll
 Plugins\currencyrates.dll
 Plugins\cyrtranslit.dll
+Plugins\dbchecker.dll
 Plugins\dbeditorpp.dll
 Plugins\dbx_mdbx.dll
 Plugins\dbx_mmap.dll
@@ -89,13 +90,12 @@ Plugins\mobilestate.dll
 Plugins\mradio.dll
 Plugins\msg_export.dll
 Plugins\msgpopup.dll
-Plugins\msn.dll
-Plugins\mtextcontrol.dll
 Plugins\mydetails.dll
 Plugins\new_gpg.dll
 Plugins\newawaysys.dll
 Plugins\neweventnotify.dll
 Plugins\newsaggregator.dll
+Plugins\newstory.dll
 Plugins\newxstatusnotify.dll
 Plugins\nimcontact.dll
 Plugins\nohistory.dll
@@ -189,7 +189,6 @@ Libs\hunspell.mir
 Libs\libeay32.mir
 Libs\libcurl.mir
 Libs\libjson.mir
-Libs\libmdbx.mir
 Libs\libsignal.mir
 Libs\libssh2.mir
 Libs\mir_app.mir
@@ -222,7 +221,6 @@ Icons\proto_metacontacts.dll
 Icons\proto_minecraftdynmap.dll
 Icons\proto_mra.dll
 Icons\proto_mradio.dll
-Icons\proto_msn.dll
 Icons\proto_newsaggregator.dll
 Icons\proto_omegle.dll
 Icons\proto_sametime.dll

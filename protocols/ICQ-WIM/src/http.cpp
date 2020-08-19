@@ -22,6 +22,17 @@
 
 #pragma comment(lib, "Rpcrt4.lib")
 
+void CIcqProto::DropQueue()
+{
+	mir_cslock lck(m_csHttpQueue);
+
+	while (m_arHttpQueue.getCount()) {
+		auto *pReq = m_arHttpQueue[0];
+		m_arHttpQueue.remove(0);
+		delete pReq;
+	}
+}
+
 bool CIcqProto::IsQueueEmpty()
 {
 	mir_cslock lck(m_csHttpQueue);
@@ -240,7 +251,9 @@ void CIcqProto::Push(MHttpRequest *p)
 AsyncHttpRequest* operator<<(AsyncHttpRequest *pReq, const AIMSID &param)
 {
 	pReq << CHAR_PARAM("f", "json") << CHAR_PARAM("aimsid", param.m_ppro->m_aimsid) << CHAR_PARAM("r", pReq->m_reqId);
-	pReq->flags |= NLHRF_NODUMPSEND;
+	#ifndef _DEBUG
+		pReq->flags |= NLHRF_NODUMPSEND;
+	#endif
 	return pReq;
 }
 

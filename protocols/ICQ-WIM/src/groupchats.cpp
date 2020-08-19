@@ -100,15 +100,8 @@ class CGroupchatInviteDlg : public CIcqDlgBase
 
 	void ResetListOptions(CCtrlClc*)
 	{
-		m_clc.SetBkBitmap(0, nullptr);
-		m_clc.SetBkColor(GetSysColor(COLOR_WINDOW));
-		m_clc.SetGreyoutFlags(0);
-		m_clc.SetLeftMargin(4);
-		m_clc.SetIndent(10);
 		m_clc.SetHideEmptyGroups(1);
 		m_clc.SetHideOfflineRoot(1);
-		for (int i = 0; i <= FONTID_MAX; i++)
-			m_clc.SetTextColor(i, GetSysColor(COLOR_WINDOWTEXT));
 	}
 
 public:
@@ -211,7 +204,7 @@ int CIcqProto::GroupchatEventHook(WPARAM, LPARAM lParam)
 
 	SESSION_INFO *si = g_chatApi.SM_FindSession(gch->si->ptszID, gch->si->pszModule);
 	if (si == nullptr)
-		return 0;
+		return 1;
 
 	switch (gch->iType) {
 	case GC_USER_MESSAGE:
@@ -235,7 +228,7 @@ int CIcqProto::GroupchatEventHook(WPARAM, LPARAM lParam)
 		break;
 	}
 
-	return 0;
+	return 1;
 }
 
 void CIcqProto::Chat_ProcessLogMenu(SESSION_INFO *si, int iChoice)

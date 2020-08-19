@@ -71,7 +71,7 @@ INT_PTR Meta_GetCaps(WPARAM wParam, LPARAM)
 		return 2000;
 
 	case PFLAG_UNIQUEIDTEXT:
-		return (INT_PTR)"Metacontact";
+		return (INT_PTR)L"Metacontact";
 	}
 	return 0;
 }
@@ -126,12 +126,11 @@ static void Meta_SetSrmmSub(MCONTACT hMeta, MCONTACT hSub)
 static INT_PTR MetaFilter_RecvMessage(WPARAM wParam, LPARAM lParam)
 {
 	CCSDATA *ccs = (CCSDATA*)lParam;
-	DBCachedContact *cc = currDb->getCache()->GetCachedContact(ccs->hContact);
+	DBCachedContact *cc = g_pCurrDb->getCache()->GetCachedContact(ccs->hContact);
 	if (cc && cc->IsSub())
 		Meta_SetSrmmSub(cc->parentID, cc->contactID);
 
-	Proto_ChainRecv(wParam, ccs);
-	return 0;
+	return Proto_ChainRecv(wParam, ccs);
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -178,24 +177,6 @@ INT_PTR Meta_GetStatus(WPARAM, LPARAM)
 /// Copied from MSN plugin - sent acks need to be from different thread :(
 //////////////////////////////////////////////////////////
 
-struct TFakeAckParams
-{
-	HANDLE hEvent;
-	MCONTACT hContact;
-	LONG id;
-};
-
-static void __cdecl sttFakeAckFail(TFakeAckParams *tParam)
-{
-	WaitForSingleObject(tParam->hEvent, INFINITE);
-
-	Sleep(100);
-	ProtoBroadcastAck(META_PROTO, tParam->hContact, ACKTYPE_MESSAGE, ACKRESULT_FAILED, (HANDLE)tParam->id, (WPARAM)TranslateT("No online contacts found."));
-
-	CloseHandle(tParam->hEvent);
-	mir_free(tParam);
-}
-
 INT_PTR Meta_SendNudge(WPARAM wParam, LPARAM lParam)
 {
 	DBCachedContact *cc = CheckMeta(wParam);
@@ -230,16 +211,7 @@ INT_PTR Meta_SendMessage(WPARAM wParam, LPARAM lParam)
 
 	MCONTACT hMostOnline = db_mc_getSrmmSub(cc->contactID);
 	if (!hMostOnline) {
-		// send failure to notify user of reason
-		HANDLE hEvent = CreateEvent(nullptr, TRUE, FALSE, nullptr);
-
-		TFakeAckParams *tfap = (TFakeAckParams *)mir_alloc(sizeof(TFakeAckParams));
-		tfap->hContact = ccs->hContact;
-		tfap->hEvent = hEvent;
-		tfap->id = 10;
-		mir_forkThread<TFakeAckParams>(sttFakeAckFail, tfap);
-
-		SetEvent(hEvent);
+		ProtoBroadcastAsync(META_PROTO, ccs->hContact, ACKTYPE_MESSAGE, ACKRESULT_FAILED, (HANDLE)10, (WPARAM)TranslateT("No online contacts found."));
 		return 10;
 	}
 
@@ -321,11 +293,11 @@ int Meta_SettingChanged(WPARAM hContact, LPARAM lParam)
 	if (hContact == 0)
 		return 0;
 
-	DBCachedContact *cc = currDb->getCache()->GetCachedContact(hContact);
+	DBCachedContact *cc = g_pCurrDb->getCache()->GetCachedContact(hContact);
 	if (cc == nullptr || !cc->IsSub())
 		return 0;
 
-	DBCachedContact *ccMeta = currDb->getCache()->GetCachedContact(cc->parentID);
+	DBCachedContact *ccMeta = g_pCurrDb->getCache()->GetCachedContact(cc->parentID);
 	if (ccMeta == nullptr || !ccMeta->IsMeta())
 		return 0;
 
@@ -447,7 +419,7 @@ int Meta_SettingChanged(WPARAM hContact, LPARAM lParam)
 
 int Meta_ContactDeleted(WPARAM hContact, LPARAM)
 {
-	DBCachedContact *cc = currDb->getCache()->GetCachedContact(hContact);
+	DBCachedContact *cc = g_pCurrDb->getCache()->GetCachedContact(hContact);
 	if (cc == nullptr)
 		return 0;
 
@@ -474,7 +446,7 @@ int Meta_ContactDeleted(WPARAM hContact, LPARAM)
 
 	// remove & restore all subcontacts
 	for (int i = 0; i < cc->nSubs; i++)
-		currDb->MetaDetouchSub(cc, i);
+		g_pCurrDb->MetaDetouchSub(cc, i);
 
 	return 0;
 }
@@ -528,7 +500,7 @@ static int Meta_MessageWindowEvent(WPARAM, LPARAM lParam)
 {
 	MessageWindowEventData *mwed = (MessageWindowEventData*)lParam;
 	if (mwed->uType == MSG_WINDOW_EVT_OPEN) {
-		DBCachedContact *cc = currDb->getCache()->GetCachedContact(mwed->hContact);
+		DBCachedContact *cc = g_pCurrDb->getCache()->GetCachedContact(mwed->hContact);
 		if (cc != nullptr) {
 			Srmm_SetIconFlags(cc->contactID, META_PROTO, 0, cc->IsMeta() ? 0 : MBF_HIDDEN);
 			if (cc->IsMeta()) {

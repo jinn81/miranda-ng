@@ -238,6 +238,8 @@ public:
 
 	bool OnInitDialog() override
 	{
+		SetWindowTextW(m_hwnd, CMStringW(FORMAT, L"%s: %s", TranslateT("Roster Editor"), m_proto->m_tszUserName));
+
 		Window_SetIcon_IcoLib(m_hwnd, g_plugin.getIconHandle(IDI_AGENTS));
 
 		Utils_RestoreWindowPosition(m_hwnd, 0, m_proto->m_szModuleName, "rosterCtrlWnd_");
@@ -301,19 +303,14 @@ public:
 				LVFINDINFO lvfi = { 0 };
 				lvfi.flags = LVFI_STRING;
 				lvfi.psz = tszJid;
-				wchar_t *p = wcschr(tszJid, '@');
-				if (p) {
-					p = wcschr(tszJid, '/');
-					if (p) *p = 0;
-				}
 				if (m_list.FindItem(-1, &lvfi) == -1) {
 					ptrA tszName(db_get_utfa(hContact, "CList", "MyHandle"));
 					ptrA tszGroup(db_get_utfa(hContact, "CList", "Group"));
-					_RosterInsertListItem(T2Utf(tszJid), tszName, tszGroup, nullptr, FALSE);
+					_RosterInsertListItem(T2Utf(tszJid), tszName, tszGroup, nullptr, false);
 				}
 			}
-			m_bReadyToDownload = FALSE;
-			m_bReadyToUpload = TRUE;
+			m_bReadyToDownload = false;
+			m_bReadyToUpload = true;
 			btnDownload.SetText(TranslateT("Download"));
 			btnUpload.SetText(TranslateT("Upload"));
 			OnChangeStatus();
@@ -326,11 +323,6 @@ public:
 			if (!queryRoster)
 				return;
 
-			XmlNodeIq iq(m_proto->AddIQ(&CJabberProto::_RosterHandleGetRequest, JABBER_IQ_TYPE_SET));
-
-			TiXmlElement *query = iq << XCHILDNS("query", JABBER_FEAT_IQ_ROSTER);
-
-			int itemCount = 0;
 			int ListItemCount = m_list.GetItemCount();
 			for (int index = 0; index < ListItemCount; index++) {
 				wchar_t jid[JABBER_MAX_JID_LEN] = L"";
@@ -347,42 +339,42 @@ public:
 				BOOL bRemove = !m_list.GetCheckState(index);
 				if (itemRoster && bRemove) {
 					//delete item
-					query << XCHILD("item") << XATTR("jid", szJid) << XATTR("subscription", "remove");
-					itemCount++;
+					XmlNodeIq iq(m_proto->AddIQ(&CJabberProto::_RosterHandleGetRequest, JABBER_IQ_TYPE_SET));
+					iq << XCHILDNS("query", JABBER_FEAT_IQ_ROSTER) << XCHILD("item") << XATTR("jid", szJid) << XATTR("subscription", "remove");
+					m_proto->m_ThreadInfo->send(iq);
 				}
 				else if (!bRemove) {
-					BOOL bPushed = itemRoster ? TRUE : FALSE;
+					bool bPushed = itemRoster != 0;
+					const char *rosterName = 0, *rosterGroup = 0;
 					if (!bPushed) {
-						const char *rosterName = XmlGetAttr(itemRoster, "name");
+						rosterName = XmlGetAttr(itemRoster, "name");
 						if ((rosterName != nullptr || name[0] != 0) && mir_strcmpi(rosterName, szName))
-							bPushed = TRUE;
+							bPushed = true;
 						if (!bPushed) {
-							rosterName = XmlGetAttr(itemRoster, "subscription");
-							if ((rosterName != nullptr || subscr[0] != 0) && mir_strcmpi(rosterName, T2Utf(subscr)))
-								bPushed = TRUE;
+							auto *szSub = XmlGetAttr(itemRoster, "subscription");
+							if ((szSub != nullptr || subscr[0] != 0) && mir_strcmpi(szSub, szSubscr))
+								bPushed = true;
 						}
 						if (!bPushed) {
-							auto *rosterGroup = XmlGetChildText(itemRoster, "group");
+							rosterGroup = XmlGetChildText(itemRoster, "group");
 							if (rosterGroup != nullptr && mir_strcmpi(rosterGroup, szGroup))
-								bPushed = TRUE;
+								bPushed = true;
 						}
 					}
 					if (bPushed) {
-						TiXmlElement *item = query << XCHILD("item");
-						if (mir_wstrlen(group))
+						XmlNodeIq iq(m_proto->AddIQ(&CJabberProto::_RosterHandleGetRequest, JABBER_IQ_TYPE_SET));
+						auto *item = iq << XCHILDNS("query", JABBER_FEAT_IQ_ROSTER) << XCHILD("item");
+						if (rosterGroup || mir_strlen(szGroup))
 							item << XCHILD("group", szGroup);
-						if (mir_wstrlen(name))
+						if (rosterName || mir_strlen(szName))
 							item << XATTR("name", szName);
 						item << XATTR("jid", szJid) << XATTR("subscription", subscr[0] ? szSubscr : "none");
-						itemCount++;
+						m_proto->m_ThreadInfo->send(iq);
 					}
 				}
 			}
 			m_bRRAction = RRA_SYNCDONE;
-			if (itemCount)
-				m_proto->m_ThreadInfo->send(iq);
-			else
-				_RosterSendRequest(RRA_FILLLIST);
+			_RosterSendRequest(RRA_FILLLIST);
 			return;
 		}
 
@@ -411,18 +403,17 @@ public:
 		wchar_t filename[MAX_PATH] = { 0 };
 
 		wchar_t filter[MAX_PATH];
-		mir_snwprintf(filter, L"%s (*.xml)%c*.xml%c%c", TranslateT("XML for MS Excel (UTF-8 encoded)"), 0, 0, 0);
-		OPENFILENAME ofn = { 0 };
+		mir_snwprintf(filter, L"%s (*.xml)%c*.xml%c%c", TranslateT("XML (UTF-8 encoded)"), 0, 0, 0);
+		OPENFILENAME ofn = {};
 		ofn.lStructSize = OPENFILENAME_SIZE_VERSION_400;
 		ofn.hwndOwner = m_hwnd;
-		ofn.hInstance = nullptr;
 		ofn.lpstrFilter = filter;
 		ofn.lpstrFile = filename;
 		ofn.Flags = OFN_HIDEREADONLY;
 		ofn.nMaxFile = _countof(filename);
 		ofn.nMaxFileTitle = MAX_PATH;
 		ofn.lpstrDefExt = L"xml";
-		if (!GetSaveFileName(&ofn))
+		if (!GetSaveFileNameW(&ofn))
 			return;
 
 		FILE * fp = _wfopen(filename, L"wb");
@@ -431,16 +422,7 @@ public:
 
 		int ListItemCount = m_list.GetItemCount();
 
-		XmlNode root("Workbook");
-		root << XATTR("xmlns", "urn:schemas-microsoft-com:office:spreadsheet")
-			<< XATTR("xmlns:o", "urn:schemas-microsoft-com:office:office")
-			<< XATTR("xmlns:x", "urn:schemas-microsoft-com:office:excel")
-			<< XATTR("xmlns:ss", "urn:schemas-microsoft-com:office:spreadsheet")
-			<< XATTR("xmlns:html", "http://www.w3.org/TR/REC-html40");
-		root << XCHILD("ExcelWorkbook")
-			<< XATTR("xmlns", "urn:schemas-microsoft-com:office:excel");
-		TiXmlElement *table = root << XCHILD("Worksheet") << XATTR("ss:Name", "Exported roster")
-			<< XCHILD("Table");
+		XmlNode root("Roster");
 
 		for (int index = 0; index < ListItemCount; index++) {
 			wchar_t jid[JABBER_MAX_JID_LEN] = L"";
@@ -451,37 +433,25 @@ public:
 			m_list.GetItemText(index, 1, name, _countof(name));
 			m_list.GetItemText(index, 2, group, _countof(group));
 			m_list.GetItemText(index, 3, subscr, _countof(subscr));
-
-			TiXmlElement *node = table << XCHILD("Row");
-			node << XCHILD("Cell") << XCHILD("Data", "+") << XATTR("ss:Type", "String");
-			node << XCHILD("Cell") << XCHILD("Data", T2Utf(jid)) << XATTR("ss:Type", "String");
-			node << XCHILD("Cell") << XCHILD("Data", T2Utf(name)) << XATTR("ss:Type", "String");
-			node << XCHILD("Cell") << XCHILD("Data", T2Utf(group)) << XATTR("ss:Type", "String");
-			node << XCHILD("Cell") << XCHILD("Data", T2Utf(subscr)) << XATTR("ss:Type", "String");
-
+			root << XCHILD("Item") << XATTR("jid", T2Utf(jid)) << XATTR("name", T2Utf(name)) << XATTR("group", T2Utf(group)) << XATTR("subscription", T2Utf(subscr));
 		}
 
-		char header[] = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<?mso-application progid=\"Excel.Sheet\"?>\n";
-		fwrite(header, 1, sizeof(header) - 1 /* for zero terminator */, fp);
-
-		tinyxml2::XMLPrinter printer(0);
+		tinyxml2::XMLPrinter printer(fp);
 		root.Print(&printer);
-		fputs(printer.CStr(), fp);
 		fclose(fp);
 	}
 
 	void onClick_Import(CCtrlButton*)
 	{
-		wchar_t filename[MAX_PATH] = { 0 };
-		wchar_t *filter = L"XML for MS Excel (UTF-8 encoded)(*.xml)\0*.xml\0\0";
+		wchar_t filename[MAX_PATH] = {};
 
 		OPENFILENAME ofn = { 0 };
 		ofn.lStructSize = OPENFILENAME_SIZE_VERSION_400;
 		ofn.hwndOwner = m_hwnd;
 		ofn.hInstance = nullptr;
-		ofn.lpstrFilter = filter;
-		ofn.lpstrFile = filename;
+		ofn.lpstrFilter = L"XML (UTF-8 encoded)(*.xml)\0*.xml\0\0";
 		ofn.Flags = OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+		ofn.lpstrFile = filename;
 		ofn.nMaxFile = _countof(filename);
 		ofn.nMaxFileTitle = MAX_PATH;
 		ofn.lpstrDefExt = L"xml";
@@ -503,7 +473,7 @@ public:
 		const TiXmlElement *Table = TiXmlConst(&doc)["Workbook"]["Worksheet"]["Table"].ToElement();
 		if (Table) {
 			for (auto *Row : TiXmlFilter(Table, "Row")) {
-				BOOL bAdd = FALSE;
+				bool bAdd = false;
 				const char *jid = nullptr;
 				const char *name = nullptr;
 				const char *group = nullptr;
@@ -511,15 +481,18 @@ public:
 				auto *Cell = XmlFirstChild(Row, "Cell");
 				auto *Data = XmlFirstChild(Cell, "Data");
 				if (Data) {
-					if (!mir_strcmpi(Data->GetText(), "+")) bAdd = TRUE;
-					else if (mir_strcmpi(Data->GetText(), "-")) continue;
+					if (!mir_strcmpi(Data->GetText(), "+"))
+						bAdd = true;
+					else if (mir_strcmpi(Data->GetText(), "-"))
+						continue;
 
 					Cell = Cell->NextSiblingElement("Cell");
 					if (Cell) Data = XmlFirstChild(Cell, "Data");
 					else Data = nullptr;
 					if (Data) {
 						jid = Data->GetText();
-						if (!jid || mir_strlen(jid) == 0) continue;
+						if (!jid || mir_strlen(jid) == 0)
+							continue;
 					}
 
 					Cell = Cell->NextSiblingElement("Cell");
@@ -538,6 +511,15 @@ public:
 					if (Data) subscr = Data->GetText();
 				}
 				_RosterInsertListItem(jid, name, group, subscr, bAdd);
+			}
+		}
+		else if (Table = TiXmlConst(&doc)["Roster"].ToElement()) {
+			for (auto *Row : TiXmlFilter(Table, "Item")) {
+				auto *jid = Row->Attribute("jid");
+				auto *name = Row->Attribute("name");
+				auto *group = Row->Attribute("group");
+				auto *subscr = Row->Attribute("subscription");
+				_RosterInsertListItem(jid, name, group, subscr, true);
 			}
 		}
 

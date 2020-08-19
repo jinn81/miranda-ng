@@ -2,7 +2,7 @@
 ;============================================================
 ;  File: SkypeWeb.dll
 ;  Plugin: Skype protocol (Web)
-;  Version: 0.12.3.5
+;  Version: 0.95.12.1
 ;  Authors: Miranda NG team
 ;============================================================
 [Skype protocol support for Miranda NG. Based on new Skype for Web.]
@@ -121,6 +121,8 @@ URI объект
 Передача файла:\n\tИмя файла: %s \n\tРазмер: %lld байт \n
 [Preview]
 Тест
+[Full image]
+Полноформатное изображение
 [Unknown event, please send this text for developer: "%s"]
 Неизвестное событие, пожалуйста, отправьте этот текст разработчику: "%s"
 ;file \protocols\SkypeWeb\src\skype_icons.cpp
@@ -128,8 +130,6 @@ URI объект
 Значок протокола
 [Create new chat icon]
 Создать новый чат
-[Sync history icon]
-Синхронизировать историю
 [Block user icon]
 Заблокировать контакт
 [Unblock user icon]
@@ -154,8 +154,6 @@ URI объект
 [Authentication failed. Unknown error.]
 Не удалось авторизоваться из-за неизвестной ошибки.
 ;file \protocols\SkypeWeb\src\skype_menus.cpp
-[Get server history]
-Синхронизировать историю
 [Block contact]
 Заблокировать контакт
 [Unblock contact]
@@ -169,9 +167,6 @@ URI объект
 Неизвестная ошибка!
 [Network error!]
 Ошибка сети!
-;file \protocols\SkypeWeb\src\skype_mslogin.cpp
-[Enter confirmation code]
-Введите код подтверждения
 ;file \protocols\SkypeWeb\src\skype_network.cpp
 [%s connection]
 %s подключение
@@ -190,6 +185,3 @@ URI объект
 Отмена входящего звонка
 [Skypename]
 Логин Skype
-;file \protocols\SkypeWeb\src\skype_trouter.cpp
-[Incoming call from %s]
-Входящий звонок от %s

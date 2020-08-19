@@ -146,11 +146,9 @@ void __cdecl exportContactsMessages(ExportDialogData *data)
 
 			list<CLDBEvent> &rclCurList = AllEvents[GetFilePathFromUser(hContact)];
 
-			MEVENT hDbEvent = db_event_first(hContact);
-			while (hDbEvent) {
+			DB::ECPTR pCursor(DB::Events(hContact));
+			while (MEVENT hDbEvent = pCursor.FetchNext())
 				rclCurList.push_back(CLDBEvent(hContact, hDbEvent));
-				hDbEvent = db_event_next(hContact, hDbEvent);
-			}
 
 			SendMessage(hProg, PBM_SETPOS, nCur, 0);
 			RedrawWindow(hDlg, nullptr, nullptr, RDW_ALLCHILDREN | RDW_UPDATENOW);
@@ -406,7 +404,6 @@ public:
 
 class CContactsOptDlg : public CDlgBase
 {
-	CCtrlButton btnExportAll, btnExportSel, btnUserDetails, btnAutoFileName, btnClearAll, btnSetDefault;
 	CCtrlListView listUsers;
 	CCtrlHyperlink urlHelp;
 
@@ -414,25 +411,13 @@ public:
 	CContactsOptDlg() :
 		CDlgBase(g_plugin, IDD_OPT_CONTACTS),
 		urlHelp(this, IDC_OPEN_HELP, "https://miranda-ng.org/p/Msg_Export/"),
-		listUsers(this, IDC_MAP_USER_LIST),
-		btnClearAll(this, IDC_CLEAR_ALL),
-		btnExportAll(this, IDC_EXPORTALL),
-		btnExportSel(this, ID_EXPORTSELECTED),
-		btnSetDefault(this, ID_SET_TO_DEFAULT),
-		btnUserDetails(this, ID_USERLIST_USERDETAILS),
-		btnAutoFileName(this, IDC_AUTO_FILENAME)
+		listUsers(this, IDC_MAP_USER_LIST)
 	{
 		listUsers.OnKeyDown = Callback(this, &CContactsOptDlg::list_KeyDown);
 		listUsers.OnBuildMenu = Callback(this, &CContactsOptDlg::list_OnMenu);
 		listUsers.OnColumnClick = Callback(this, &CContactsOptDlg::list_ColumnClick);
 		listUsers.OnDoubleClick = Callback(this, &CContactsOptDlg::list_DoubleClick);
 		listUsers.OnEndLabelEdit = Callback(this, &CContactsOptDlg::list_LabelEdit);
-
-		btnClearAll.OnClick = Callback(this, &CContactsOptDlg::onClick_ClearAll);
-		btnExportAll.OnClick = btnExportSel.OnClick = Callback(this, &CContactsOptDlg::onClick_Export);
-		btnSetDefault.OnClick = Callback(this, &CContactsOptDlg::onClick_SetDefault);
-		btnUserDetails.OnClick = Callback(this, &CContactsOptDlg::onClick_Details);
-		btnAutoFileName.OnClick = Callback(this, &CContactsOptDlg::onClick_AutoFileName);
 	}
 
 	bool OnInitDialog() override
@@ -460,13 +445,13 @@ public:
 		listUsers.InsertColumn(1, &cCol);
 
 		cCol.cx = nProtoColWitdh;
-		cCol.pszText = TranslateT("Proto");
+		cCol.pszText = TranslateT("Account");
 		listUsers.InsertColumn(2, &cCol);
 
 		cCol.cx = nUINColWitdh;
 		cCol.mask |= LVCF_FMT;
 		cCol.fmt = LVCFMT_RIGHT;
-		cCol.pszText = TranslateT("UIN");
+		cCol.pszText = TranslateT("User ID");
 		listUsers.InsertColumn(3, &cCol);
 
 		int nUser = 0;
@@ -495,16 +480,18 @@ public:
 			sItem.pszText = pa->tszAccountName;
 			listUsers.SetItem(&sItem);
 
-			DWORD dwUIN = db_get_dw(hContact, pa->szModuleName, "UIN", 0);
-			wchar_t szTmp[50];
-			mir_snwprintf(szTmp, L"%d", dwUIN);
-			sItem.iSubItem = 3;
-			sItem.pszText = szTmp;
-			listUsers.SetItem(&sItem);
+			ptrW wszUin(Contact_GetInfo(CNF_UNIQUEID, hContact, pa->szModuleName));
+			if (wszUin) {
+				sItem.iSubItem = 3;
+				sItem.pszText = wszUin;
+				listUsers.SetItem(&sItem);
+			}
 
 			listUsers.SetCheckState(sItem.iItem, g_plugin.getByte(hContact, "EnableLog", 1));
 		}
 		listUsers.SortItems(CompareFunc, 1);
+
+		Select(true);
 
 		sItem.mask = LVIF_STATE;
 		sItem.iItem = 0;
@@ -545,17 +532,9 @@ public:
 		return true;
 	}
 
-	void onClick_Export(CCtrlButton *pButton)
+	void Export()
 	{
-		bool bOnlySelected = pButton->GetCtrlId() != IDC_EXPORTALL;
-		int nTotalContacts = listUsers.GetItemCount();
-
-		int nContacts;
-		if (bOnlySelected)
-			nContacts = listUsers.GetSelectedCount();
-		else
-			nContacts = nTotalContacts;
-
+		int nContacts = listUsers.GetSelectedCount();
 		if (nContacts <= 0) {
 			MessageBox(m_hwnd, TranslateT("No contacts found to export"), MSG_BOX_TITEL, MB_OK);
 			return;
@@ -567,10 +546,10 @@ public:
 		LVITEM sItem = { 0 };
 		sItem.mask = LVIF_PARAM;
 
+		int nTotalContacts = listUsers.GetItemCount();
 		for (int nCur = 0; nCur < nTotalContacts; nCur++) {
-			if (bOnlySelected)
-				if (!(listUsers.GetItemState(nCur, LVIS_SELECTED) & LVIS_SELECTED))
-					continue;
+			if (!(listUsers.GetItemState(nCur, LVIS_SELECTED) & LVIS_SELECTED))
+				continue;
 
 			sItem.iItem = nCur;
 			if (!listUsers.GetItem(&sItem))
@@ -588,7 +567,7 @@ public:
 		mir_forkThread<ExportDialogData>(&exportContactsMessages, data);
 	}
 
-	void onClick_Details(CCtrlButton*)
+	void Details()
 	{
 		LVITEM sItem;
 		sItem.mask = LVIF_PARAM;
@@ -597,7 +576,7 @@ public:
 			CallService(MS_USERINFO_SHOWDIALOG, (WPARAM)sItem.lParam, 0);
 	}
 
-	void onClick_AutoFileName(CCtrlButton*)
+	void AutoFileName()
 	{
 		LVITEM sItem = { 0 };
 
@@ -667,7 +646,7 @@ public:
 		}
 	}
 
-	void onClick_ClearAll(CCtrlButton*)
+	void ClearAll()
 	{
 		LVITEM sItem = { 0 };
 		sItem.mask = LVIF_TEXT;
@@ -682,7 +661,17 @@ public:
 		NotifyChange();
 	}
 
-	void onClick_SetDefault(CCtrlButton*)
+	void Select(bool bCheck)
+	{
+		int nContacts = listUsers.GetItemCount();
+		if (nContacts <= 0)
+			return;
+
+		for (int nCur = 0; nCur < nContacts; nCur++)
+			listUsers.SetItemState(nCur, bCheck ? LVIS_SELECTED : 0, LVIS_SELECTED);
+	}
+
+	void SetDefault()
 	{
 		int nContacts = listUsers.GetItemCount();
 		if (nContacts <= 0)
@@ -725,9 +714,18 @@ public:
 			GetCursorPos(&pt);
 
 			TranslateMenu(hMenu);
-			TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN | TPM_RIGHTBUTTON, pt.x, pt.y, 0, m_hwnd, nullptr);
-
+			int iRet = TrackPopupMenu(hMenu, TPM_TOPALIGN | TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, pt.x, pt.y, 0, m_hwnd, nullptr);
 			DestroyMenu(hMainMenu);
+
+			switch (iRet) {
+			case ID_EXPORT:               Export(); break;
+			case ID_USERLIST_USERDETAILS: Details(); break;
+			case ID_CLEAR_ALL:            ClearAll(); break;
+			case ID_SELECT_ALL:           Select(true); break;
+			case ID_SELECT_NONE:          Select(false); break;
+			case ID_SET_TO_DEFAULT:       SetDefault(); break;
+			case ID_AUTO_FILENAME:        AutoFileName(); break;
+			}
 		}
 	}
 
@@ -860,7 +858,7 @@ public:
 		LVCOLUMN cCol = { 0 };
 		cCol.mask = LVCF_TEXT | LVCF_WIDTH;
 		cCol.cx = nColumnWidth;
-		cCol.pszText = TranslateT("Export Protocols");
+		cCol.pszText = TranslateT("Export accounts");
 		listProtos.InsertColumn(0, &cCol);
 
 		LVITEMW sItem = { 0 };

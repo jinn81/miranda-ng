@@ -28,7 +28,6 @@ CVkCaptchaForm::CVkCaptchaForm(CVkProto *proto, CAPTCHA_FORM_PARAMS *param) :
 	m_param(param)
 {
 	m_btnOpenInBrowser.OnClick = Callback(this, &CVkCaptchaForm::On_btnOpenInBrowser_Click);
-	m_btnOk.OnClick = Callback(this, &CVkCaptchaForm::On_btnOk_Click);
 	m_edtValue.OnChange = Callback(this, &CVkCaptchaForm::On_edtValue_Change);
 }
 
@@ -39,6 +38,12 @@ bool CVkCaptchaForm::OnInitDialog()
 	m_btnOk.Disable();
 	m_btnOpenInBrowser.Enable((m_param->bmp != nullptr));
 	m_instruction.SetText(TranslateT("Enter the text you see"));
+	return true;
+}
+
+bool CVkCaptchaForm::OnApply()
+{
+	m_edtValue.GetTextA(m_param->Result, _countof(m_param->Result));
 	return true;
 }
 
@@ -90,12 +95,6 @@ void CVkCaptchaForm::On_btnOpenInBrowser_Click(CCtrlButton*)
 	m_proto->ShowCaptchaInBrowser(m_param->bmp);
 }
 
-void CVkCaptchaForm::On_btnOk_Click(CCtrlButton*)
-{
-	m_edtValue.GetTextA(m_param->Result, _countof(m_param->Result));
-	EndDialog(m_hwnd, 1);
-}
-
 void CVkCaptchaForm::On_edtValue_Change(CCtrlEdit*)
 {
 	m_btnOk.Enable(!IsEmpty(ptrA(m_edtValue.GetTextA())));
@@ -111,7 +110,6 @@ CVkWallPostForm::CVkWallPostForm(CVkProto *proto, WALLPOST_FORM_PARAMS *param) :
 	m_btnShare(this, IDOK),
 	m_param(param)
 {
-	m_btnShare.OnClick = Callback(this, &CVkWallPostForm::On_btnShare_Click);
 	m_edtMsg.OnChange = Callback(this, &CVkWallPostForm::On_edtValue_Change);
 	m_edtUrl.OnChange = Callback(this, &CVkWallPostForm::On_edtValue_Change);
 }
@@ -127,18 +125,17 @@ bool CVkWallPostForm::OnInitDialog()
 	return true;
 }
 
-void CVkWallPostForm::OnDestroy()
-{
-	Window_FreeIcon_IcoLib(m_hwnd);
-}
-
-void CVkWallPostForm::On_btnShare_Click(CCtrlButton*)
+bool CVkWallPostForm::OnApply()
 {
 	m_param->pwszUrl = m_edtUrl.GetText();
 	m_param->pwszMsg = m_edtMsg.GetText();
 	m_param->bFriendsOnly = m_cbOnlyForFriends.GetState() != 0;
+	return true;
+}
 
-	EndDialog(m_hwnd, 1);
+void CVkWallPostForm::OnDestroy()
+{
+	Window_FreeIcon_IcoLib(m_hwnd);
 }
 
 void CVkWallPostForm::On_edtValue_Change(CCtrlEdit*)
@@ -150,11 +147,9 @@ void CVkWallPostForm::On_edtValue_Change(CCtrlEdit*)
 
 CVkInviteChatForm::CVkInviteChatForm(CVkProto *proto) :
 	CVkDlgBase(proto, IDD_INVITE),
-	m_btnOk(this, IDOK),
 	m_cbxCombo(this, IDC_CONTACT),
 	m_hContact(0)
 {
-	m_btnOk.OnClick = Callback(this, &CVkInviteChatForm::btnOk_OnOk);
 }
 
 bool CVkInviteChatForm::OnInitDialog()
@@ -165,43 +160,41 @@ bool CVkInviteChatForm::OnInitDialog()
 	return true;
 }
 
-void CVkInviteChatForm::btnOk_OnOk(CCtrlButton*)
+bool CVkInviteChatForm::OnApply()
 {
 	m_hContact = m_cbxCombo.GetItemData(m_cbxCombo.GetCurSel());
-	EndDialog(m_hwnd, 1);
+	return true;
 }
 
 ////////////////////////////////// IDD_GC_CREATE //////////////////////////////////////////
 
 CVkGCCreateForm::CVkGCCreateForm(CVkProto *proto) :
 	CVkDlgBase(proto, IDD_GC_CREATE),
-	m_btnOk(this, IDOK),
-	m_clCList(this, IDC_CLIST),
+	m_clc(this, IDC_CLIST),
 	m_edtTitle(this, IDC_TITLE)
 {
-	m_btnOk.OnClick = Callback(this, &CVkGCCreateForm::btnOk_OnOk);
-	m_clCList.OnListRebuilt = Callback(this, &CVkGCCreateForm::FilterList);
+	m_clc.OnListRebuilt = Callback(this, &CVkGCCreateForm::FilterList);
 }
 
 bool CVkGCCreateForm::OnInitDialog()
 {
-	SetWindowLongPtr(m_clCList.GetHwnd(), GWL_STYLE, GetWindowLongPtr(m_clCList.GetHwnd(), GWL_STYLE)
+	SetWindowLongPtr(m_clc.GetHwnd(), GWL_STYLE, GetWindowLongPtr(m_clc.GetHwnd(), GWL_STYLE)
 		| CLS_CHECKBOXES | CLS_HIDEEMPTYGROUPS | CLS_USEGROUPS | CLS_GREYALTERNATE);
-	m_clCList.SendMsg(CLM_SETEXSTYLE, CLS_EX_DISABLEDRAGDROP | CLS_EX_TRACKSELECT, 0);
+	m_clc.SendMsg(CLM_SETEXSTYLE, CLS_EX_DISABLEDRAGDROP | CLS_EX_TRACKSELECT, 0);
 
-	ResetListOptions(&m_clCList);
+	ResetListOptions();
 	return true;
 }
 
-void CVkGCCreateForm::btnOk_OnOk(CCtrlButton*)
+bool CVkGCCreateForm::OnApply()
 {
 	CMStringA szUIds;
 	for (auto &hContact : m_proto->AccContacts()) {
 		if (m_proto->isChatRoom(hContact))
 			continue;
 
-		HANDLE hItem = m_clCList.FindContact(hContact);
-		if (hItem && m_clCList.GetCheck(hItem)) {
+		HANDLE hItem = m_clc.FindContact(hContact);
+		if (hItem && m_clc.GetCheck(hItem)) {
 			int uid = m_proto->getDword(hContact, "ID");
 			if (uid != 0) {
 				if (!szUIds.IsEmpty())
@@ -214,8 +207,7 @@ void CVkGCCreateForm::btnOk_OnOk(CCtrlButton*)
 	bool bRes = !szUIds.IsEmpty();
 	if (bRes)
 		m_proto->CreateNewChat(szUIds, ptrW(m_edtTitle.GetText()));
-
-	EndDialog(m_hwnd, bRes);
+	return true;
 }
 
 void CVkGCCreateForm::FilterList(CCtrlClc*)
@@ -223,38 +215,27 @@ void CVkGCCreateForm::FilterList(CCtrlClc*)
 	for (auto &hContact : Contacts()) {
 		char *proto = Proto_GetBaseAccountName(hContact);
 		if (mir_strcmp(proto, m_proto->m_szModuleName) || m_proto->isChatRoom(hContact) || m_proto->getDword(hContact, "ID") == VK_FEED_USER)
-			if (HANDLE hItem = m_clCList.FindContact(hContact))
-				m_clCList.DeleteItem(hItem);
+			if (HANDLE hItem = m_clc.FindContact(hContact))
+				m_clc.DeleteItem(hItem);
 	}
 }
 
-void CVkGCCreateForm::ResetListOptions(CCtrlClc *clCList)
+void CVkGCCreateForm::ResetListOptions()
 {
-	if (!clCList)
-		return;
-
-	clCList->SetBkBitmap(0, nullptr);
-	clCList->SetBkColor(GetSysColor(COLOR_WINDOW));
-	clCList->SetGreyoutFlags(0);
-	clCList->SetLeftMargin(4);
-	clCList->SetIndent(10);
-	clCList->SetHideEmptyGroups(true);
-	clCList->SetHideOfflineRoot(true);
-	for (int i = 0; i <= FONTID_MAX; i++)
-		clCList->SetTextColor(i, GetSysColor(COLOR_WINDOWTEXT));
+	m_clc.SetBkColor(GetSysColor(COLOR_WINDOW));
+	m_clc.SetHideEmptyGroups(true);
+	m_clc.SetHideOfflineRoot(true);
 }
 
 ////////////////////////////////// IDD_CONTACTDELETE //////////////////////////////////////
 
 CVkContactDeleteForm::CVkContactDeleteForm(CVkProto *proto, CONTACTDELETE_FORM_PARAMS *param) :
 	CVkDlgBase(proto, IDD_CONTACTDELETE),
-	m_btnOk(this, IDOK),
 	m_stText(this, IDC_STATIC_TXT),
 	m_cbDeleteFromFriendlist(this, IDC_CH_REMOVE_FROM_FRIEND),
 	m_cbDeleteDialog(this, IDC_CH_CLEARHISTORY),
 	m_param(param)
 {
-	m_btnOk.OnClick = Callback(this, &CVkContactDeleteForm::btnOk_OnOk);
 }
 
 bool CVkContactDeleteForm::OnInitDialog()
@@ -278,12 +259,9 @@ bool CVkContactDeleteForm::OnInitDialog()
 	return true;
 }
 
-void CVkContactDeleteForm::btnOk_OnOk(CCtrlButton*)
+bool CVkContactDeleteForm::OnApply()
 {
-
 	m_param->bDeleteDialog = m_cbDeleteDialog.GetState() != 0;
-	m_param->bDeleteFromFriendlist = m_param->bEnableDeleteFromFriendlist
-		&& (m_cbDeleteFromFriendlist.GetState() != 0);
-
-	EndDialog(m_hwnd, 1);
+	m_param->bDeleteFromFriendlist = m_param->bEnableDeleteFromFriendlist && (m_cbDeleteFromFriendlist.GetState() != 0);
+	return true;
 }

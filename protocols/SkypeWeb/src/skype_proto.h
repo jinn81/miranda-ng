@@ -18,19 +18,32 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #ifndef _SKYPE_PROTO_H_
 #define _SKYPE_PROTO_H_
 
-typedef void(CSkypeProto::*SkypeResponseCallback)(const NETLIBHTTPREQUEST *response);
-typedef void(CSkypeProto::*SkypeResponseWithArgCallback)(const NETLIBHTTPREQUEST *response, void *arg);
-
-struct CSkypeProto : public PROTO < CSkypeProto >
+struct CSkypeProto : public PROTO <CSkypeProto>
 {
-	friend CSkypeOptionsMain;
-	friend CSkypeGCCreateDlg;
+	friend class CSkypeOptionsMain;
+	friend class CSkypeGCCreateDlg;
+	friend class CSkypeInviteDlg;
+
+	class CSkypeProtoImpl
+	{
+		friend struct CSkypeProto;
+		CSkypeProto &m_proto;
+
+		CTimer m_heartBeat;
+		void OnHeartBeat(CTimer *)
+		{
+			m_proto.ProcessTimer();
+		}
+
+		CSkypeProtoImpl(CSkypeProto &pro) :
+			m_proto(pro),
+			m_heartBeat(Miranda_GetSystemWindow(), UINT_PTR(this) + 1)
+		{
+			m_heartBeat.OnEvent = Callback(this, &CSkypeProtoImpl::OnHeartBeat);
+		}
+	} m_impl;
 
 public:
-
-	//////////////////////////////////////////////////////////////////////////////////////
-	//Ctors
-
 	CSkypeProto(const char *protoName, const wchar_t *userName);
 	~CSkypeProto();
 
@@ -85,53 +98,60 @@ public:
 
 	CSkypeOptions m_opts;
 
-	ptrA m_szApiToken, m_szToken, m_szId, m_szServer;
+	int m_iPollingId;
+	ptrA m_szApiToken, m_szToken, m_szId;
 	CMStringA m_szSkypename, m_szMyname;
 
+	__forceinline CMStringA getId(MCONTACT hContact) {
+		return getMStringA(hContact, SKYPE_SETTINGS_ID);
+	}
+
+	void OnReceiveAvatar(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+	void OnSentAvatar(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+	void OnSearch(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+
+	// login
+	void OnLoginOAuth(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+	void OnSubscriptionsCreated(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+	void OnCapabilitiesSended(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+	void OnReceiveStatus(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+	void OnStatusChanged(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+
+	void OnEndpointCreated(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+	void OnEndpointDeleted(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+
+	// oauth
+	void OnOAuthStart(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+	void OnOAuthAuthorize(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+	void OnOAuthEnd(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+
+	void OnASMObjectCreated(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+	void OnASMObjectUploaded(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+
+	void LoadContactsAuth(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+	void LoadContactList(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+
+	void OnBlockContact(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+	void OnUnblockContact(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+
+	void OnMessageSent(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+
+	void OnGetServerHistory(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+	void OnSyncHistory(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+
+	void OnLoadChats(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+	void OnGetChatInfo(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+	void OnReceiveAwayMsg(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+
+	void LoadProfile(NETLIBHTTPREQUEST *response, AsyncHttpRequest *pRequest);
+
 private:
-	struct contacts_list
-	{
-		CSkypeProto *m_proto;
-		std::map<MCONTACT, char*> m_cache;
-
-		contacts_list(CSkypeProto *ppro) : m_proto(ppro)
-		{}
-
-		~contacts_list()
-		{
-			for (auto &it : m_cache)
-				mir_free(it.second);
-		}
-
-		const char* operator[](MCONTACT hContact)
-		{
-			try
-			{
-				return m_cache.at(hContact);
-			}
-			catch (std::out_of_range&)
-			{
-				char *id = m_proto->getStringA(hContact, SKYPE_SETTINGS_ID);
-				m_cache[hContact] = id;
-				return id;
-			}
-		}
-
-	} Contacts;
-
-	static UINT_PTR m_timer;
-
-	class RequestQueue *requestQueue;
-
 	bool m_bHistorySynced;
 
 	std::map<std::string, std::string> cookies;
 	static std::map<std::wstring, std::wstring> languages;
 
-	HNETLIBCONN m_pollingConnection, m_TrouterConnection;
-	HANDLE m_hPollingThread, m_hTrouterThread;
-
-	TRInfo TRouter;
+	HANDLE m_hPollingThread;
 
 	LIST<void> m_PopupClasses;
 	LIST<void> m_OutMessages;
@@ -142,13 +162,9 @@ private:
 
 	// locks
 	mir_cs m_lckOutMessagesList;
-	mir_cs m_InviteDialogsLock;
-	mir_cs m_GCCreateDialogsLock;
 	mir_cs messageSyncLock;
 	mir_cs m_StatusLock;
 	mir_cs m_AppendMessageLock;
-	static mir_cs accountsLock;
-	static mir_cs timerLock;
 
 	bool m_bThreadsTerminated;
 
@@ -167,32 +183,23 @@ private:
 	INT_PTR __cdecl SvcSetMyAvatar(WPARAM, LPARAM);
 
 	// requests
+	bool m_isTerminated = true;
+	mir_cs m_requestQueueLock;
+	LIST<AsyncHttpRequest> m_requests;
+	EventHandle m_hRequestQueueEvent;
+	HANDLE m_hRequestQueueThread;
 
-	void InitNetwork();
-	void UnInitNetwork();
-	void ShutdownConnections();
+	static unsigned __cdecl AsyncSendThread(void *, void *);
+	void __cdecl WorkerThread(void *);
 
-	void PushRequest(HttpRequest *request);
-	void PushRequest(HttpRequest *request, SkypeResponseCallback response);
-	void PushRequest(HttpRequest *request, SkypeResponseWithArgCallback response, void *arg);
+	void StartQueue();
+	void StopQueue();
 
-	template<typename F>
-	void PushRequest(HttpRequest *request, F callback)
-	{
-		SkypeResponseDelegateBase *delegate = new SkypeResponseDelegateLambda<F>(this, callback);
-		requestQueue->Push(request, SkypeHttpResponse, delegate);
-	}
+	NETLIBHTTPREQUEST* DoSend(AsyncHttpRequest *request);
 
-	void SendRequest(HttpRequest *request);
-	void SendRequest(HttpRequest *request, SkypeResponseCallback response);
-	void SendRequest(HttpRequest *request, SkypeResponseWithArgCallback response, void *arg);
-
-	template<typename F>
-	void SendRequest(HttpRequest *request, F callback)
-	{
-		SkypeResponseDelegateBase *delegate = new SkypeResponseDelegateLambda<F>(this, response);
-		requestQueue->Send(request, SkypeHttpResponse, delegate);
-	}
+	void Execute(AsyncHttpRequest *request);
+	void PushRequest(AsyncHttpRequest *request);
+	void SendRequest(AsyncHttpRequest *request);
 
 	// menus
 	static HGENMENU ContactMenuItems[CMI_MAX];
@@ -202,34 +209,11 @@ private:
 	// options
 	int __cdecl OnOptionsInit(WPARAM wParam, LPARAM lParam);
 
-	// oauth
-	void OnOAuthStart(const NETLIBHTTPREQUEST *response);
-	void OnOAuthAuthorize(const NETLIBHTTPREQUEST *response);
-	void OnOAuthEnd(const NETLIBHTTPREQUEST *response);
-
 	// login
 	void Login();
-	void OnMSLoginFirst(const NETLIBHTTPREQUEST *response);
-	void OnMSLoginSecond(const NETLIBHTTPREQUEST *response);
-	void OnMSLoginThird(const NETLIBHTTPREQUEST *response);
-	void OnMSLoginEnd(const NETLIBHTTPREQUEST *response);
-	void OnLoginOAuth(const NETLIBHTTPREQUEST *response);
 	void OnLoginSuccess();
-	void OnEndpointCreated(const NETLIBHTTPREQUEST *response);
-	void SendPresence(bool isLogin = false);
-	void OnSubscriptionsCreated(const NETLIBHTTPREQUEST *response);
-	void OnCapabilitiesSended(const NETLIBHTTPREQUEST *response);
-	void OnStatusChanged(const NETLIBHTTPREQUEST *response);
-
-	//TRouter
-
-	void OnCreateTrouter(const NETLIBHTTPREQUEST *response);
-	void OnTrouterPoliciesCreated(const NETLIBHTTPREQUEST *response);
-	void OnGetTrouter(const NETLIBHTTPREQUEST *response);
-	void OnHealth(const NETLIBHTTPREQUEST *response);
-	void OnTrouterEvent(const JSONNode &body, const JSONNode &headers);
-	void __cdecl TRouterThread(void*);
-
+	void SendPresence();
+	
 	// profile
 	void UpdateProfileFirstName(const JSONNode &root, MCONTACT hContact = NULL);
 	void UpdateProfileLastName(const JSONNode &root, MCONTACT hContact = NULL);
@@ -249,12 +233,7 @@ private:
 	void UpdateProfileXStatusMessage(const JSONNode &root, MCONTACT hContact = NULL);
 	void UpdateProfileAvatar(const JSONNode &root, MCONTACT hContact = NULL);
 
-	void LoadProfile(const NETLIBHTTPREQUEST *response, void *arg);
-
-
 	void __cdecl CSkypeProto::SendFileThread(void *p);
-	void OnASMObjectCreated(const NETLIBHTTPREQUEST *response, void *arg);
-	void OnASMObjectUploaded(const NETLIBHTTPREQUEST *response, void *arg);
 
 	// contacts
 	WORD GetContactStatus(MCONTACT hContact);
@@ -264,21 +243,10 @@ private:
 	void ReloadAvatarInfo(MCONTACT hContact);
 	void GetAvatarFileName(MCONTACT hContact, wchar_t* pszDest, size_t cbLen);
 
-	void OnReceiveAvatar(const NETLIBHTTPREQUEST *response, void *arg);
-	void OnSentAvatar(const NETLIBHTTPREQUEST *response);
-	void OnSearch(const NETLIBHTTPREQUEST *response);
-
 	MCONTACT FindContact(const char *skypename);
 	MCONTACT AddContact(const char *skypename, bool isTemporary = false);
 
 	MCONTACT GetContactFromAuthEvent(MEVENT hEvent);
-
-	void LoadContactsAuth(const NETLIBHTTPREQUEST *response);
-	void LoadContactsInfo(const NETLIBHTTPREQUEST *response);
-	void LoadContactList(const NETLIBHTTPREQUEST *response);
-
-	void OnBlockContact(const NETLIBHTTPREQUEST *response, void *p);
-	void OnUnblockContact(const NETLIBHTTPREQUEST *response, void *p);
 
 	// messages
 	std::map<ULONGLONG, HANDLE> m_mpOutMessagesIds;
@@ -288,7 +256,6 @@ private:
 	void EditEvent(MCONTACT hContact, MEVENT hEvent, const char *szContent, time_t edit_time);
 
 	int OnSendMessage(MCONTACT hContact, int flags, const char *message);
-	void OnMessageSent(const NETLIBHTTPREQUEST *response, void *arg);
 	int __cdecl OnPreCreateMessage(WPARAM, LPARAM lParam);
 
 	void MarkMessagesRead(MCONTACT hContact, MEVENT hDbEvent);
@@ -296,10 +263,6 @@ private:
 	void OnPrivateMessageEvent(const JSONNode &node);
 
 	void ProcessContactRecv(MCONTACT hContact, time_t timestamp, const char *szContent, const char *szMessageId);
-
-	// sync
-	void OnGetServerHistory(const NETLIBHTTPREQUEST *response);
-	void OnSyncHistory(const NETLIBHTTPREQUEST *response);
 
 	// chats
 	void InitGroupChatModule();
@@ -312,8 +275,6 @@ private:
 	INT_PTR __cdecl OnLeaveChatRoom(WPARAM hContact, LPARAM);
 
 	void StartChatRoom(const wchar_t *tid, const wchar_t *tname);
-	void OnLoadChats(const NETLIBHTTPREQUEST *response);
-	void OnGetChatInfo(const NETLIBHTTPREQUEST *response, void *p);
 
 	void OnChatEvent(const JSONNode &node);
 	void OnSendChatMessage(const char *chat_id, const wchar_t *tszMessage);
@@ -328,13 +289,18 @@ private:
 	void SetChatStatus(MCONTACT hContact, int iStatus);
 
 	// polling
-	void __cdecl PollingThread     (void*);
-	void __cdecl ParsePollData     (const char*);
-	void ProcessEndpointPresence   (const JSONNode &node);
-	void ProcessUserPresence       (const JSONNode &node);
-	void ProcessNewMessage         (const JSONNode &node);
-	void ProcessConversationUpdate (const JSONNode &node);
-	void ProcessThreadUpdate       (const JSONNode &node);
+	void __cdecl PollingThread(void*);
+
+	void ParsePollData(const char*);
+
+	void ProcessNewMessage(const JSONNode &node);
+	void ProcessUserPresence(const JSONNode &node);
+	void ProcessThreadUpdate(const JSONNode &node);
+	void ProcessEndpointPresence(const JSONNode &node);
+	void ProcessConversationUpdate(const JSONNode &node);
+
+	void RefreshStatuses(void);
+	void ReadHistoryRest(const char *url);
 
 	// utils
 	template <typename T>
@@ -352,9 +318,7 @@ private:
 	{	return (!mir_strcmpi(str, m_szMyname) || !mir_strcmp(str, ptrA(getStringA("SelfEndpointName"))));
 	}
 
-	MEVENT AddEventToDb(MCONTACT hContact, WORD type, DWORD timestamp, DWORD flags, DWORD cbBlob, PBYTE pBlob);
 	static time_t IsoToUnixTime(const char *stamp);
-	static char *RemoveHtml(const char *text);
 	static CMStringA GetStringChunk(const char *haystack, const char *start, const char *end);
 
 	static int SkypeToMirandaStatus(const char *status);
@@ -371,12 +335,7 @@ private:
 	static CMStringA UrlToSkypename(const char *url);
 	static CMStringA GetServerFromUrl(const char *url);
 
-	//---Timers
-	void CALLBACK SkypeUnsetTimer();
-	void CALLBACK SkypeSetTimer();
 	void ProcessTimer();
-	static void CALLBACK TimerProc(HWND, UINT, UINT_PTR, DWORD);
-	//---/
 
 	CMStringW RunConfirmationCode();
 	CMStringW ChangeTopicForm();
@@ -385,8 +344,6 @@ private:
 	void InitDBEvents();
 
 	//services
-	INT_PTR __cdecl OnIncomingCallCLE(WPARAM wParam, LPARAM lParam);
-	INT_PTR __cdecl OnIncomingCallPP(WPARAM wParam, LPARAM lParam);
 	INT_PTR __cdecl BlockContact(WPARAM hContact, LPARAM);
 	INT_PTR __cdecl UnblockContact(WPARAM hContact, LPARAM);
 	INT_PTR __cdecl OnRequestAuth(WPARAM hContact, LPARAM lParam);
@@ -402,14 +359,6 @@ private:
 		CSkypeProto *proto = CMPlugin::getInstance((MCONTACT)wParam);
 		return proto ? (proto->*Service)(wParam, lParam) : 0;
 	}
-};
-
-struct CMPlugin : public ACCPROTOPLUGIN<CSkypeProto>
-{
-	CMPlugin();
-
-	int Load() override;
-	int Unload() override;
 };
 
 #endif //_SKYPE_PROTO_H_

@@ -58,7 +58,7 @@ void CVkProto::OnReceivePollingInfo(NETLIBHTTPREQUEST *reply, AsyncHttpRequest *
 			m_pollingTs ? m_pollingTs.get() : "<nullptr>",
 			m_pollingKey ? m_pollingKey.get() : "<nullptr>",
 			m_pollingServer ? m_pollingServer.get() : "<nullptr>");
-		
+
 		if (m_pollingTs != nullptr && m_pollingKey != nullptr && m_pollingServer != nullptr) {
 			debugLogA("CVkProto::OnReceivePollingInfo PollingThread starting...");
 			m_hPollingThread = ForkThreadEx(&CVkProto::PollingThread, nullptr, nullptr);
@@ -102,12 +102,11 @@ void CVkProto::PollUpdates(const JSONNode &jnUpdates)
 
 			if (hContact != 0 && (flags & VKFLAG_MSGUNREAD) && !IsMessageExist(msgid, vkIN)) {
 				setDword(hContact, "LastMsgReadTime", time(0));
-				if (g_bMessageState) {
-					MessageReadData data(time(0), MRD_TYPE_READTIME);
-					CallService(MS_MESSAGESTATE_UPDATE, hContact, (LPARAM)&data);
-				}
+				if (g_bMessageState)
+					CallService(MS_MESSAGESTATE_UPDATE, hContact, MRD_TYPE_READ);
 				else
 					SetSrmmReadStatus(hContact);
+
 				if (m_vkOptions.bUserForceInvisibleOnActivity)
 					SetInvisible(hContact);
 				if (m_vkOptions.bSyncReadMessageStatusFromServer)
@@ -176,10 +175,8 @@ void CVkProto::PollUpdates(const JSONNode &jnUpdates)
 			hContact = FindUser(uid);
 			if (hContact != 0) {
 				setDword(hContact, "LastMsgReadTime", time(0));
-				if (g_bMessageState) {
-					MessageReadData data(time(0), MRD_TYPE_READTIME);
-					CallService(MS_MESSAGESTATE_UPDATE, hContact, (LPARAM)&data);
-				}
+				if (g_bMessageState)
+					CallService(MS_MESSAGESTATE_UPDATE, hContact, MRD_TYPE_READ);
 				else
 					SetSrmmReadStatus(hContact);
 

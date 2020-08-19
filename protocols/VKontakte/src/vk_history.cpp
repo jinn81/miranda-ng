@@ -38,12 +38,9 @@ INT_PTR __cdecl CVkProto::SvcGetAllServerHistoryForContact(WPARAM hContact, LPAR
 
 	setByte(hContact, "ActiveHistoryTask", 1);
 
-	MEVENT hDBEvent = db_event_first(hContact);
-	while (hDBEvent) {
-		MEVENT hDBEventNext = db_event_next(hContact, hDBEvent);
-		db_event_delete(hDBEvent);
-		hDBEvent = hDBEventNext;
-	}
+	DB::ECPTR pCursor(DB::Events(hContact));
+	while (pCursor.FetchNext())
+		pCursor.DeleteEvent();
 
 	m_bNotifyForEndLoadingHistory = true;
 
@@ -70,12 +67,9 @@ INT_PTR __cdecl CVkProto::SvcGetAllServerHistory(WPARAM, LPARAM)
 			break;
 		setByte(hContact, "ActiveHistoryTask", 1);
 
-		MEVENT hDBEvent = db_event_first(hContact);
-		while (hDBEvent) {
-			MEVENT hDBEventNext = db_event_next(hContact, hDBEvent);
-			db_event_delete(hDBEvent);
-			hDBEvent = hDBEventNext;
-		}
+		DB::ECPTR pCursor(DB::Events(hContact));
+		while (pCursor.FetchNext())
+			pCursor.DeleteEvent();
 
 		{
 			mir_cslock lck(m_csLoadHistoryTask);
@@ -86,7 +80,6 @@ INT_PTR __cdecl CVkProto::SvcGetAllServerHistory(WPARAM, LPARAM)
 
 		db_unset(hContact, m_szModuleName, "lastmsgid");
 		GetServerHistory(hContact, 0, MAXHISTORYMIDSPERONE, 0, 0);
-
 	}
 
 	return 1;
@@ -105,14 +98,12 @@ void CVkProto::GetServerHistoryLastNDay(MCONTACT hContact, int NDay)
 	time_t tTime = time(0) - 60 * 60 * 24 * NDay;
 
 	if (NDay > 3) {
-		MEVENT hDBEvent = db_event_first(hContact);
-		while (hDBEvent) {
-			MEVENT hDBEventNext = db_event_next(hContact, hDBEvent);
+		DB::ECPTR pCursor(DB::Events(hContact));
+		while (MEVENT hDbEvent = pCursor.FetchNext()) {
 			DBEVENTINFO dbei = {};
-			db_event_get(hDBEvent, &dbei);
+			db_event_get(hDbEvent, &dbei);
 			if (dbei.timestamp > tTime && dbei.eventType != VK_USER_DEACTIVATE_ACTION)
-				db_event_delete(hDBEvent);
-			hDBEvent = hDBEventNext;
+				pCursor.DeleteEvent();
 		}
 
 		{
@@ -139,7 +130,7 @@ void CVkProto::GetServerHistory(MCONTACT hContact, int iOffset, int iCount, int 
 	if (VK_INVALID_USER == userID || userID == VK_FEED_USER)
 		return;
 
-	Push(new AsyncHttpRequest(this, REQUEST_GET, "/method/execute.GetServerHistory", true, &CVkProto::OnReceiveHistoryMessages, AsyncHttpRequest::rpLow)
+	Push(new AsyncHttpRequest(this, REQUEST_GET, "/method/execute.GetServerConversationHistory", true, &CVkProto::OnReceiveHistoryMessages, AsyncHttpRequest::rpLow)
 		<< INT_PARAM("reqcount", iCount)
 		<< INT_PARAM("offset", iOffset)
 		<< INT_PARAM("userid", userID)
@@ -147,7 +138,6 @@ void CVkProto::GetServerHistory(MCONTACT hContact, int iOffset, int iCount, int 
 		<< INT_PARAM("lastmid", iLastMsgId)
 		<< INT_PARAM("once", (int)once)
 	)->pUserInfo = new CVkSendMsgParam(hContact, iLastMsgId, iOffset);
-
 }
 
 void CVkProto::GetHistoryDlg(MCONTACT hContact, int iLastMsg)
@@ -232,7 +222,6 @@ void CVkProto::OnReceiveHistoryMessages(NETLIBHTTPREQUEST *reply, AsyncHttpReque
 
 	for (auto it = jnMsgs.rbegin(); it != jnMsgs.rend(); ++it) {
 		const JSONNode &jnMsg = (*it);
-
 		int mid = jnMsg["id"].as_int();
 		if (iLastMsgId < mid)
 			iLastMsgId = mid;
@@ -240,22 +229,32 @@ void CVkProto::OnReceiveHistoryMessages(NETLIBHTTPREQUEST *reply, AsyncHttpReque
 		char szMid[40];
 		_itoa(mid, szMid, 10);
 
-		CMStringW wszBody(jnMsg["body"].as_mstring());
+		CMStringW wszBody(jnMsg["text"].as_mstring());
+		int uid = jnMsg["peer_id"].as_int();
+		int iReadMsg = getDword(param->hContact, "in_read", 0);
+		int isRead = (mid <= iReadMsg);
 		int datetime = jnMsg["date"].as_int();
 		int isOut = jnMsg["out"].as_int();
-		int isRead = jnMsg["read_state"].as_int();
-		int uid = jnMsg["user_id"].as_int();
+		MCONTACT hContact = FindUser(uid, true);
 
 		const JSONNode &jnFwdMessages = jnMsg["fwd_messages"];
-		if (jnFwdMessages) {
+		if (jnFwdMessages && !jnFwdMessages.empty()) {
 			CMStringW wszFwdMessages = GetFwdMessages(jnFwdMessages, jnFUsers, m_vkOptions.BBCForAttachments());
 			if (!wszBody.IsEmpty())
 				wszFwdMessages = L"\n" + wszFwdMessages;
 			wszBody += wszFwdMessages;
 		}
 
+		const JSONNode& jnReplyMessages = jnMsg["reply_message"];
+		if (jnReplyMessages && !jnReplyMessages.empty()) {
+			CMStringW wszReplyMessages = GetFwdMessages(jnReplyMessages, jnFUsers, m_vkOptions.BBCForAttachments());
+			if (!wszBody.IsEmpty())
+				wszReplyMessages = L"\n" + wszReplyMessages;
+			wszBody += wszReplyMessages;
+		}
+
 		const JSONNode &jnAttachments = jnMsg["attachments"];
-		if (jnAttachments) {
+		if (jnAttachments && !jnAttachments.empty()) {
 			CMStringW wszAttachmentDescr = GetAttachmentDescr(jnAttachments, m_vkOptions.BBCForAttachments());
 
 			if (wszAttachmentDescr == L"== FilterAudioMessages ==") {
@@ -268,11 +267,10 @@ void CVkProto::OnReceiveHistoryMessages(NETLIBHTTPREQUEST *reply, AsyncHttpReque
 			wszBody += wszAttachmentDescr;
 		}
 
-		if (m_vkOptions.bAddMessageLinkToMesWAtt && (jnAttachments || jnFwdMessages))
+		if (m_vkOptions.bAddMessageLinkToMesWAtt && ((jnAttachments && !jnAttachments.empty()) || (jnFwdMessages && !jnFwdMessages.empty()) || (jnReplyMessages && !jnReplyMessages.empty())))
 			wszBody += SetBBCString(TranslateT("Message link"), m_vkOptions.BBCForAttachments(), vkbbcUrl,
 				CMStringW(FORMAT, L"https://vk.com/im?sel=%d&msgid=%d", uid, mid));
 
-		MCONTACT hContact = FindUser(uid, true);
 		PROTORECVEVENT recv = { 0 };
 		if (isRead)
 			recv.flags |= PREF_CREATEREAD;
@@ -315,10 +313,8 @@ void CVkProto::OnReceiveHistoryMessages(NETLIBHTTPREQUEST *reply, AsyncHttpReque
 
 	setDword(param->hContact, "lastmsgid", iLastMsgId);
 
-	if (g_bMessageState) {
-		MessageReadData data(tLastReadMessageTime, MRD_TYPE_MESSAGETIME);
-		CallService(MS_MESSAGESTATE_UPDATE, param->hContact, (LPARAM)&data);
-	}
+	if (g_bMessageState)
+		CallService(MS_MESSAGESTATE_UPDATE, param->hContact, MRD_TYPE_DELIVERED);
 
 	int once = jnResponse["once"].as_int();
 	int iRCount = jnResponse["rcount"].as_int();

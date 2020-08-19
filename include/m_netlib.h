@@ -42,7 +42,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 struct NETLIBHTTPREQUEST;
 struct NETLIBOPENCONNECTION;
 
-#define NETLIB_USER_AGENT "Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.2; Trident/6.0)"
+#define NETLIB_USER_AGENT "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.113 Safari/537.36"
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // Initialises the netlib for a set of connections
@@ -389,7 +389,7 @@ EXTERN_C MIR_APP_DLL(char*) Netlib_AddressToString(sockaddr_in *addr);
 EXTERN_C MIR_APP_DLL(bool)  Netlib_StringToAddress(const char *str, sockaddr_in *addr);
 
 /////////////////////////////////////////////////////////////////////////////////////////
-// Get connection Information
+// Gets connection Information
 // IPv4 will be supplied in formats address:port or address
 // IPv6 will be supplied in formats [address]:port or [address]
 // Returns 0 if successful
@@ -402,6 +402,12 @@ struct NETLIBCONNINFO
 };
 
 EXTERN_C MIR_APP_DLL(int) Netlib_GetConnectionInfo(HNETLIBCONN hConnection, NETLIBCONNINFO *connInfo);
+
+/////////////////////////////////////////////////////////////////////////////////////////
+// Gets TLS channel binging data for a socket
+// Returns true if successful
+
+EXTERN_C MIR_APP_DLL(void*) Netlib_GetTlsUnique(HNETLIBCONN nlc, int &cbLen);
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // Gets connection Information
@@ -754,17 +760,6 @@ EXTERN_C MIR_APP_DLL(int) Netlib_Logf(HNETLIBUSER hUser, _Printf_format_string_ 
 EXTERN_C MIR_APP_DLL(int) Netlib_LogfW(HNETLIBUSER hUser, _Printf_format_string_ const wchar_t *fmt, ...);
 
 EXTERN_C MIR_APP_DLL(void) Netlib_Dump(HNETLIBCONN nlc, const void *buf, size_t len, bool bIsSent, int flags);
-
-/////////////////////////////////////////////////////////////////////////////////////////
-// Security providers (0.6+)
-
-#define NNR_UNICODE 1
-
-#ifdef UNICODE
-	#define NNR_TCHAR NNR_UNICODE
-#else
-	#define NNR_TCHAR 0
-#endif
 
 // Inits a required security provider. Right now only NTLM is supported
 // Returns HANDLE = NULL on error or non-null value on success

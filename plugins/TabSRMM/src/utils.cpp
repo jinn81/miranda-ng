@@ -186,12 +186,13 @@ ok:
 			if (PluginConfig.g_SmileyAddAvail && (endmark > (beginmark + 1))) {
 				CMStringW smcode = msg.Mid(beginmark, (endmark - beginmark) + 1);
 
-				SMADD_BATCHPARSE2 smbp = { 0 };
+				SMADD_BATCHPARSE2 smbp = {};
 				smbp.cbSize = sizeof(smbp);
 				smbp.Protocolname = m_cache->getActiveProto();
 				smbp.flag = SAFL_TCHAR | SAFL_PATH | (isSent ? SAFL_OUTGOING : 0);
 				smbp.str = (wchar_t*)smcode.c_str();
 				smbp.hContact = m_hContact;
+
 				SMADD_BATCHPARSERES *smbpr = (SMADD_BATCHPARSERES *)CallService(MS_SMILEYADD_BATCHPARSE, 0, (LPARAM)&smbp);
 				if (smbpr) {
 					CallService(MS_SMILEYADD_BATCHFREE, 0, (LPARAM)smbpr);
@@ -955,32 +956,6 @@ HWND TSAPI GetTabWindow(HWND hwndTab, int i)
 /////////////////////////////////////////////////////////////////////////////////////////
 // file list handler
 
-void Utils::AddToFileList(wchar_t ***pppFiles, int *totalCount, LPCTSTR szFilename)
-{
-	*pppFiles = (wchar_t**)mir_realloc(*pppFiles, (++*totalCount + 1) * sizeof(wchar_t*));
-	(*pppFiles)[*totalCount] = nullptr;
-	(*pppFiles)[*totalCount - 1] = mir_wstrdup(szFilename);
-
-	if (GetFileAttributes(szFilename) & FILE_ATTRIBUTE_DIRECTORY) {
-		WIN32_FIND_DATA fd;
-		wchar_t szPath[MAX_PATH];
-		mir_wstrcpy(szPath, szFilename);
-		mir_wstrcat(szPath, L"\\*");
-		HANDLE hFind = FindFirstFile(szPath, &fd);
-		if (hFind != INVALID_HANDLE_VALUE) {
-			do {
-				if (!mir_wstrcmp(fd.cFileName, L".") || !mir_wstrcmp(fd.cFileName, L".."))
-					continue;
-				mir_wstrcpy(szPath, szFilename);
-				mir_wstrcat(szPath, L"\\");
-				mir_wstrcat(szPath, fd.cFileName);
-				AddToFileList(pppFiles, totalCount, szPath);
-			} while (FindNextFile(hFind, &fd));
-			FindClose(hFind);
-		}
-	}
-}
-
 int _DebugTraceW(const wchar_t *fmt, ...)
 {
 	wchar_t 	debug[2048];
@@ -1062,7 +1037,8 @@ int _DebugPopup(MCONTACT hContact, const wchar_t *fmt, ...)
 //  Entries that do not use the LPGENW() macro are NOT TRANSLATABLE, so don't bother translating them.
 
 static wchar_t* warnings[] = {
-	nullptr, nullptr,
+	nullptr, 
+	LPGENW("Save file|Unable to save temporary file"), // WARN_SAVEFILE 
 	LPGENW("Edit user notes|You are editing the user notes. Click the button again or use the hotkey (default: Alt+N) to save the notes and return to normal messaging mode"),  /* WARN_EDITUSERNOTES */
 	LPGENW("Missing component|The icon pack is missing. Please install it to the default icons folder.\n\nNo icons will be available"),		/* WARN_ICONPACKMISSING */
 	LPGENW("Aero peek warning|You have enabled Aero Peek features and loaded a custom container window skin\n\nThis can result in minor visual anomalies in the live preview feature."),	/* WARN_AEROPEEKSKIN */

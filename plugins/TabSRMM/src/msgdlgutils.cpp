@@ -66,6 +66,14 @@ bool TSAPI IsCustomEvent(int eventType)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
+
+void TSAPI AddUnreadContact(MCONTACT hContact)
+{
+	if (!g_arUnreadWindows.find(HANDLE(hContact)))
+		g_arUnreadWindows.insert(HANDLE(hContact));
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
 // checking if theres's protected text at the point
 // emulates EN_LINK WM_NOTIFY to parent to process links
 
@@ -249,24 +257,6 @@ void TSAPI ProcessAvatarChange(HWND hwnd, LPARAM lParam)
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
-// checks, if there is a valid smileypack installed for the given protocol
-
-int TSAPI CheckValidSmileyPack(const char *szProto, MCONTACT hContact)
-{
-	if (!PluginConfig.g_SmileyAddAvail)
-		return 0;
-
-	SMADD_INFO2 smainfo = { 0 };
-	smainfo.cbSize = sizeof(smainfo);
-	smainfo.Protocolname = const_cast<char *>(szProto);
-	smainfo.hContact = hContact;
-	CallService(MS_SMILEYADD_GETINFO2, 0, (LPARAM)&smainfo);
-	if (smainfo.ButtonIcon)
-		DestroyIcon(smainfo.ButtonIcon);
-	return smainfo.NumberOfVisibleSmileys;
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////
 // return value MUST be mir_free()'d by caller.
 
 wchar_t* TSAPI QuoteText(const wchar_t *text)
@@ -327,6 +317,9 @@ bool IsStringValidLink(wchar_t *pszText)
 	if (pszText == nullptr)
 		return false;
 
+	if (pszText[0] == '\\' && pszText[1] == '\\')
+		return true;
+
 	if (mir_wstrlen(pszText) < 5 || wcschr(pszText, '"'))
 		return false;
 
@@ -334,14 +327,4 @@ bool IsStringValidLink(wchar_t *pszText)
 		return true;
 
 	return wcsstr(pszText, L"://") != nullptr;
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////
-
-LRESULT TSAPI GetSendButtonState(HWND hwnd)
-{
-	HWND hwndIDok = GetDlgItem(hwnd, IDOK);
-	if (hwndIDok)
-		return SendMessage(hwndIDok, BUTTONGETSTATEID, TRUE, 0);
-	return 0;
 }

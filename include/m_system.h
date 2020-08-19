@@ -338,7 +338,7 @@ template<class T> struct LIST
 	};
 
 	__inline void destroy(void) { List_Destroy((SortedList *)this); }
-	__inline T *find(T *p) const { return (T *)List_Find((SortedList *)this, p); }
+	__inline T*   find(T *p) const { return (T *)List_Find((SortedList *)this, p); }
 	__inline int  indexOf(T *p) const { return List_IndexOf((SortedList *)this, p); }
 	__inline int  insert(T *p, int idx) { return List_Insert((SortedList *)this, p, idx); }
 	__inline int  remove(int idx) { return List_Remove((SortedList *)this, idx); }
@@ -347,7 +347,8 @@ template<class T> struct LIST
 	__inline int  remove(T *p) { return List_RemovePtr((SortedList *)this, p); }
 
 	__inline int  indexOf(T **p) const { return int(p - items); }
-	__inline T *removeItem(T **p)
+	
+	__inline T* removeItem(T **p)
 	{
 		T *savePtr = *p;
 		List_Remove((SortedList *)this, int(p - items));
@@ -531,6 +532,15 @@ struct INT64_PARAM : public PARAM
 	}
 };
 
+struct SINT64_PARAM : public PARAM
+{
+	int64_t iValue;
+	__forceinline SINT64_PARAM(const char *_name, int64_t _value) :
+		PARAM(_name), iValue(_value)
+	{
+	}
+};
+
 struct CHAR_PARAM : public PARAM
 {
 	const char *szValue;
@@ -548,6 +558,65 @@ struct WCHAR_PARAM : public PARAM
 	{
 	}
 };
+
+/////////////////////////////////////////////////////////////////////////////////////////
+// Callbacks
+
+class CCallbackImp
+{
+	struct CDummy
+	{
+		int foo;
+	};
+
+	typedef void (CDummy:: *TFnCallback)(void *argument);
+
+	CDummy *m_object;
+	TFnCallback m_func;
+
+protected:
+	template<typename TClass, typename TArgument>
+	__inline CCallbackImp(TClass *object, void (TClass:: *func)(TArgument *argument)) :
+		m_object((CDummy *)object),
+		m_func((TFnCallback)func)
+	{
+	}
+
+	__inline void Invoke(void *argument) const { if (m_func && m_object) (m_object->*m_func)(argument); }
+
+public:
+	__inline CCallbackImp() : m_object(nullptr), m_func(nullptr) {}
+
+	__inline CCallbackImp(const CCallbackImp &other) : m_object(other.m_object), m_func(other.m_func) {}
+	__inline CCallbackImp &operator=(const CCallbackImp &other) { m_object = other.m_object; m_func = other.m_func; return *this; }
+
+	__inline bool operator==(const CCallbackImp &other) const { return (m_object == other.m_object) && (m_func == other.m_func); }
+	__inline bool operator!=(const CCallbackImp &other) const { return (m_object != other.m_object) || (m_func != other.m_func); }
+
+	__inline operator bool() const { return m_object && m_func; }
+};
+
+template<typename TArgument>
+struct CCallback : public CCallbackImp
+{
+	typedef CCallbackImp CSuper;
+
+public:
+	__inline CCallback() {}
+
+	template<typename TClass>
+	__inline CCallback(TClass *object, void (TClass:: *func)(TArgument *argument)) : CCallbackImp(object, func) {}
+
+	__inline CCallback &operator=(const CCallbackImp &x) { CSuper::operator =(x); return *this; }
+
+	__inline void operator()(TArgument *argument) const { Invoke((void *)argument); }
+};
+
+template<typename TClass, typename TArgument>
+__inline CCallback<TArgument> Callback(TClass *object, void (TClass:: *func)(TArgument *argument))
+{
+	return CCallback<TArgument>(object, func);
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 // http support

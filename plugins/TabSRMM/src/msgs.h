@@ -72,21 +72,25 @@
 #define MSGDLGFONTCOUNT 22
 #define CHATFONTCOUNT 19
 
-#define TMPL_MSGIN 0
-#define TMPL_MSGOUT 1
-#define TMPL_GRPSTARTIN 2
-#define TMPL_GRPSTARTOUT 3
-#define TMPL_GRPINNERIN 4
-#define TMPL_GRPINNEROUT 5
-#define TMPL_STATUSCHG 6
-#define TMPL_ERRMSG 7
+enum
+{
+	TMPL_MSGIN = 0,
+	TMPL_MSGOUT,
+	TMPL_GRPSTARTIN,
+	TMPL_GRPSTARTOUT,
+	TMPL_GRPINNERIN,
+	TMPL_GRPINNEROUT,
+	TMPL_STATUSCHG,
+	TMPL_ERRMSG,
+	TMPL_MAX
+};
 
 #define TEMPLATE_LENGTH 150
 #define CUSTOM_COLORS 5
 
 struct TTemplateSet {
 	BOOL valid;             // all templates populated (may still contain crap.. so it's only half-assed safety :)
-	wchar_t szTemplates[TMPL_ERRMSG + 1][TEMPLATE_LENGTH];      // the template strings
+	wchar_t szTemplates[TMPL_MAX][TEMPLATE_LENGTH];      // the template strings
 	char szSetName[20];     // everything in this world needs a name. so does this poor template set.
 };
 
@@ -120,7 +124,7 @@ struct TLogTheme
 	COLORREF  custom_colors[5];
 	DWORD     dwFlags;
 	DWORD     left_indent, right_indent;
-	LOGFONTA *logFonts;
+	LOGFONTW *logFonts;
 	COLORREF *fontColors;
 	char     *rtfFonts;
 	bool      isPrivate;
@@ -277,7 +281,9 @@ struct TContainerData : public MZeroedObject
 	void InitRedraw(void);
 	void LoadOverrideTheme(void);
 	void LoadThemeDefaults(void);
-	void QueryPending();
+	void OptionsDialog(void);
+	void QueryClientArea(RECT &rc);
+	void QueryPending(void);
 	void ReflashContainer(void);
 	void Resize(bool, int newWidth);
 	void RestoreWindowPos(void);
@@ -311,7 +317,6 @@ public:
 
 	void Attach() override;
 	void LogEvents(MEVENT hDbEventFirst, int count, bool bAppend) override;
-	void LogEvents(DBEVENTINFO *dbei, bool bAppend) override;
 	void LogEvents(struct LOGINFO *, bool) override;
 	void ScrollToBottom() override;
 	void UpdateOptions() override;
@@ -379,6 +384,7 @@ class CMsgDialog : public CSrmmBaseDialog
 	int     FindRTLLocale(void);
 	void    FlashOnClist(MEVENT hEvent, DBEVENTINFO *dbei);
 	void    FlashTab(bool bInvertMode);
+	LRESULT GetSendButtonState();
 	void    GetSendFormat(void);
 	HICON   GetXStatusIcon() const;
 	void    HandlePasteAndSend(void);
@@ -388,7 +394,6 @@ class CMsgDialog : public CSrmmBaseDialog
 	void    LoadSplitter(void);
 	void    PlayIncomingSound(void) const;
 	LRESULT ProcessHotkeysByMsgFilter(const CCtrlBase &pCtrl, UINT msg, WPARAM wParam, LPARAM lParam);
-	void    ReplayQueue(void);
 	void    SaveAvatarToFile(HBITMAP hbm, int isOwnPic);
 	void 	  SendHBitmapAsFile(HBITMAP hbmp) const;
 	void    ShowPopupMenu(const CCtrlBase&, POINT pt);
@@ -410,7 +415,6 @@ class CMsgDialog : public CSrmmBaseDialog
 	int     m_originalSplitterY;
 	SIZE    m_minEditBoxSize;
 	int     m_nTypeMode;
-	int     m_iLogMode;
 	DWORD   m_nLastTyping;
 	DWORD   m_lastMessage;
 	DWORD   m_dwTickLastEvent;
@@ -431,10 +435,6 @@ class CMsgDialog : public CSrmmBaseDialog
 	bool    m_bInsertMode, m_bInitMode = true;
 	bool    m_bDeferredScroll, m_bDeferredRemakeLog;
 	bool    m_bWasBackgroundCreate;
-
-	MEVENT *m_hQueuedEvents;
-	int     m_iNextQueuedEvent;
-	int     m_iEventQueueSize;
 
 	int     m_iRealAvatarHeight;
 	int     m_iButtonBarReallyNeeds;
@@ -461,6 +461,7 @@ protected:
 public:
 	char   *m_szProto;
 	int     m_iTabID;
+	int     m_iLogMode;
 	BYTE    m_bShowTyping;
 	bool    m_bIsHistory, m_bNotOnList, m_bIsIdle;
 	bool    m_bActualHistory;
@@ -469,6 +470,7 @@ public:
 	bool    m_bEditNotesActive;
 	bool    m_bShowAvatar;
 	bool    m_bSaveBtn, m_bNeedCheckSize;
+	bool    m_bForcedClose;
 	bool    m_bErrorState;
 	bool    m_bDividerWanted, m_bDividerSet;
 	bool    m_bSplitterOverride;
@@ -577,88 +579,54 @@ public:
 		return ((CLogWindow *)m_pLog);
 	}
 
-	__forceinline void LogEvent(DBEVENTINFO *dbei) {
-		m_pLog->LogEvents(dbei, 1);
-	}
+	void LogEvent(DBEVENTINFO &dbei);
 
 	bool IsActive() const override
 	{
 		return m_pContainer->IsActive() && m_pContainer->m_hwndActive == m_hwnd;
 	}
 
-	void  DM_OptionsApplied(bool bRemakeLog = true);
-	void  DM_RecalcPictureSize(void);
-	void  DM_ScrollToBottom(WPARAM wParam, LPARAM lParam);
+	void    DM_OptionsApplied(bool bRemakeLog = true);
+	void    DM_RecalcPictureSize(void);
+	void    DM_ScrollToBottom(WPARAM wParam, LPARAM lParam);
+		     
+	void    ActivateTooltip(int iCtrlId, const wchar_t *pwszMessage);
+	void    CheckStatusIconClick(POINT pt, const RECT &rc, int gap, int code);
+	void    DrawStatusIcons(HDC hDC, const RECT &rc, int gap);
+	void    EnableSendButton(bool bMode) const;
+	void    EnableSending(bool bMode) const;
+	void    FormatRaw(CMStringW&, int flags, bool isSent);
+	bool    FormatTitleBar(const wchar_t *szFormat, CMStringW &dest);
+	bool    GetAvatarVisibility(void);
+	void    GetClientIcon(void);
+	HICON   GetMyContactIcon(LPCSTR szSetting);
+	void    GetMyNick(void);
+	HICON   IconFromAvatar(void) const;
+	void    KbdState(bool &isShift, bool &isControl, bool &isAlt);
+	void    LimitMessageText(int iLen);
+	int     LoadLocalFlags(void);
+	bool    MustPlaySound(void) const;
+	void    NotifyDeliveryFailure(void) const;
+	void    RemakeLog(void);
+	void    SaveSplitter(void);
+	void    SelectContainer(void);
+	void    SetDialogToType(void);
+	void    ShowPicture(bool showNewPic);
+	void    SplitterMoved(int x, HWND hwnd);
+	void    SwitchToContainer(const wchar_t *szNewName);
+	int     Typing(int secs);
+	void    UpdateReadChars(void) const;
+	void    UpdateSaveAndSendButton(void);
 
-	void  ActivateTooltip(int iCtrlId, const wchar_t *pwszMessage);
-	void  CheckStatusIconClick(POINT pt, const RECT &rc, int gap, int code);
-	void  DrawStatusIcons(HDC hDC, const RECT &rc, int gap);
-	void  EnableSendButton(bool bMode) const;
-	void  EnableSending(bool bMode) const;
-	void  FormatRaw(CMStringW&, int flags, bool isSent);
-	bool  FormatTitleBar(const wchar_t *szFormat, CMStringW &dest);
-	bool  GetAvatarVisibility(void);
-	void  GetClientIcon(void);
-	HICON GetMyContactIcon(LPCSTR szSetting);
-	void  GetMyNick(void);
-	HICON IconFromAvatar(void) const;
-	void  KbdState(bool &isShift, bool &isControl, bool &isAlt);
-	void  LimitMessageText(int iLen);
-	int   LoadLocalFlags(void);
-	bool  MustPlaySound(void) const;
-	void  NotifyDeliveryFailure(void) const;
-	void  RemakeLog(void);
-	void  SaveSplitter(void);
-	void  SetDialogToType(void);
-	void  ShowPicture(bool showNewPic);
-	void  SplitterMoved(int x, HWND hwnd);
-	void  UpdateReadChars(void) const;
-	void  UpdateSaveAndSendButton(void);
-
-	int   MsgWindowDrawHandler(DRAWITEMSTRUCT *dis);
-	int   MsgWindowMenuHandler(int selection, int menuId);
-	int   MsgWindowUpdateMenu(HMENU submenu, int menuID);
-
-	void  RenderToolbarBG(HDC hdc, const RECT &rcWindow) const;
-	void  UpdateToolbarBG(void);
+	int     MsgWindowDrawHandler(DRAWITEMSTRUCT *dis);
+	int     MsgWindowMenuHandler(int selection, int menuId);
+	int     MsgWindowUpdateMenu(HMENU submenu, int menuID);
+		     
+	void    RenderToolbarBG(HDC hdc, const RECT &rcWindow) const;
+	void    UpdateToolbarBG(void);
 };
 
-class CTemplateEditDlg : public CMsgDialog
-{
-	typedef CMsgDialog CSuper;
-
-	BOOL rtl;
-	BOOL changed;           // template in edit field is changed
-	BOOL selchanging;
-	int  inEdit;            // template currently in editor
-	BOOL updateInfo[TMPL_ERRMSG + 1];  // item states...
-
-	TTemplateSet *tSet;
-
-	CCtrlEdit edtText;
-	CCtrlButton btnResetAll, btnSave, btnForget, btnRevert, btnPreview;
-	CCtrlListBox listTemplates;
-	CCtrlHyperlink urlHelp;
-
-public:
-	CTemplateEditDlg(BOOL rtl, HWND hwndParent);
-
-	bool OnInitDialog() override;
-	void OnDestroy() override;
-
-	INT_PTR DlgProc(UINT uMsg, WPARAM wParam, LPARAM lParam) override;
-
-	void onChange_Text(CCtrlEdit*);
-
-	void onClick_Forget(CCtrlButton*);
-	void onClick_Preview(CCtrlButton*);
-	void onClick_Reset(CCtrlButton*);
-	void onClick_Revert(CCtrlButton*);
-	void onClick_Save(CCtrlButton*);
-
-	void onDblClick_List(CCtrlListBox*);
-	void onSelChange_List(CCtrlListBox*);
-};
+extern LIST<void> g_arUnreadWindows;
 
 #define MESSAGE_WINDOW_DATA_SIZE offsetof(_MessageWindowData, hdbEventFirst);
 
@@ -743,23 +711,20 @@ struct TIconDescW
 #define DM_SETINFOPANEL          (TM_USER+13)
 #define DM_OPTIONSAPPLIED        (TM_USER+14)
 #define DM_SPLITSENDACK          (TM_USER+19)
-#define DM_TYPING                (TM_USER+20)
 #define DM_UPDATEWINICON         (TM_USER+21)
 #define DM_UPDATELASTMESSAGE     (TM_USER+22)
 
 #define DM_STATUSICONCHANGE      (TM_USER+25)
+#define DM_CREATECONTAINER       (TM_USER+26)
 #define DM_QUERYLASTUNREAD       (TM_USER+28)
 #define DM_UPDATEPICLAYOUT       (TM_USER+30)
-#define DM_QUERYCONTAINER        (TM_USER+31)
 #define DM_MUCFLASHWORKER        (TM_USER+32)
 #define DM_APPENDMCEVENT         (TM_USER+34)
-#define DM_CHECKINFOTIP		      (TM_USER+35)
+#define DM_CHECKINFOTIP          (TM_USER+35)
 #define DM_SAVESIZE              (TM_USER+36)
 #define DM_CHECKSIZE             (TM_USER+37)
 #define DM_FORCEREDRAW           (TM_USER+38)
-#define DM_CONTAINERSELECTED     (TM_USER+39)
 #define DM_QUERYHCONTACT         (TM_USER+41)
-#define DM_QUERYCLIENTAREA       (TM_USER+45)
 #define DM_ACTIVATEME            (TM_USER+46)
 #define DM_STATUSMASKSET         (TM_USER+51)
 #define DM_UPDATESTATUSMSG       (TM_USER+53)
@@ -770,7 +735,6 @@ struct TIconDescW
 #define DM_CHECKQUEUEFORCLOSE    (TM_USER+70)
 #define DM_CHECKAUTOHIDE         (TM_USER+71)
 #define DM_HANDLECLISTEVENT      (TM_USER+73)
-#define DM_TRAYICONNOTIFY        (TM_USER+74)
 #define DM_REMOVECLISTEVENT      (TM_USER+75)
 #define DM_DOCREATETAB           (TM_USER+77)
 #define DM_SMILEYOPTIONSCHANGED  (TM_USER+85)
@@ -1017,14 +981,8 @@ struct SIDEBARITEM
 
 // callback for the user menu entry
 
-#define MS_TABMSG_SETUSERPREFS	"SRMsg_MOD/SetUserPrefs"
-#define MS_TABMSG_SLQMGR		"SRMsg_MOD/InvokeQmgr"
-
-// show one of the tray menus
-// wParam = 0 -> session list
-// wParam = 1 -> tray menu
-// lParam must be 0
-#define MS_TABMSG_TRAYSUPPORT "SRMsg_MOD/Show_TrayMenu"
+#define MS_TABMSG_SETUSERPREFS  "SRMsg_MOD/SetUserPrefs"
+#define MS_TABMSG_SLQMGR        "SRMsg_MOD/InvokeQmgr"
 
 // the service which processes globally registered hotkeys
 #define MS_TABMSG_HOTKEYPROCESS "SRMsg_MOD/ProcessHotkey"

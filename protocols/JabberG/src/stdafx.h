@@ -130,6 +130,8 @@ struct CMPlugin : public ACCPROTOPLUGIN<CJabberProto>
 class CJabberDlgBase : public CProtoDlgBase<CJabberProto>
 {
 	typedef CProtoDlgBase<CJabberProto> CSuper;
+	friend struct CJabberProto;
+
 protected:
 	__inline CJabberDlgBase(CJabberProto *proto, int idDialog) :
 		CSuper(proto, idDialog)
@@ -161,6 +163,9 @@ protected:
 #define JABBER_GC_MSG_SLAP				LPGEN("/me slaps %s around a bit with a large trout")
 #define JABBER_SERVER_URL				"https://xmpp.net/services.php"
 
+#define PGP_PROLOG "-----BEGIN PGP MESSAGE-----\r\n\r\n"
+#define PGP_EPILOG "\r\n-----END PGP MESSAGE-----\r\n"
+
 // registered db event types
 #define EVENTTYPE_JABBER_CHATSTATES          2000
 #define JS_DB_GETEVENTTEXT_CHATSTATES            "/GetEventText2000"
@@ -174,23 +179,7 @@ protected:
 #define JABBER_DB_EVENT_PRESENCE_ERROR           5
 
 // User-defined message
-#define WM_JABBER_REGDLG_UPDATE        (WM_PROTO_LAST + 100)
-#define WM_JABBER_AGENT_REFRESH        (WM_PROTO_LAST + 101)
 #define WM_JABBER_TRANSPORT_REFRESH    (WM_PROTO_LAST + 102)
-#define WM_JABBER_REGINPUT_ACTIVATE    (WM_PROTO_LAST + 103)
-#define WM_JABBER_REFRESH              WM_PROTO_REFRESH
-#define WM_JABBER_CHECK_ONLINE         WM_PROTO_CHECK_ONLINE
-#define WM_JABBER_ACTIVATE             WM_PROTO_ACTIVATE
-#define WM_JABBER_CHANGED              (WM_PROTO_LAST + 106)
-#define WM_JABBER_SET_FONT             (WM_PROTO_LAST + 108)
-#define WM_JABBER_FLASHWND             (WM_PROTO_LAST + 109)
-#define WM_JABBER_GC_MEMBER_ADD        (WM_PROTO_LAST + 110)
-#define WM_JABBER_GC_FORCE_QUIT        (WM_PROTO_LAST + 111)
-#define WM_JABBER_SHUTDOWN             (WM_PROTO_LAST + 112)
-#define WM_JABBER_SMILEY               (WM_PROTO_LAST + 113)
-#define WM_JABBER_JOIN                 (WM_PROTO_LAST + 114)
-#define WM_JABBER_ADD_TO_ROSTER        (WM_PROTO_LAST + 115)
-#define WM_JABBER_ADD_TO_BOOKMARKS     (WM_PROTO_LAST + 116)
 #define WM_JABBER_REFRESH_VCARD        (WM_PROTO_LAST + 117)
 
 #define STATUS_TITLE_MAX 16
@@ -324,6 +313,8 @@ struct CJabberHttpAuthParams
 
 #include "jabber_caps.h"
 
+extern CJabberClientCapsManager g_clientCapsManager;
+
 #define JABBER_LOGIN_ROSTER				0x0001
 #define JABBER_LOGIN_BOOKMARKS			0x0002
 #define JABBER_LOGIN_SERVERINFO			0x0004
@@ -338,7 +329,8 @@ struct JABBER_CONN_DATA : public MZeroedObject
 	int  port;
 	BOOL useSSL;
 
-	HWND reg_hwndDlg;
+	class CJabberDlgRegister *pDlg;
+	void  SetProgress(int progress, const wchar_t *pwszText);
 };
 
 struct ThreadData
@@ -363,7 +355,7 @@ struct ThreadData
 
 	void     xmpp_client_query(void);
 
-	BOOL     zlibInit(void);
+	bool     zlibInit(void);
 	void     zlibUninit();
 	int      zlibSend(char* data, int datalen);
 	int      zlibRecv(char* data, long datalen);
@@ -384,7 +376,9 @@ struct ThreadData
 	char     fullJID[JABBER_MAX_JID_LEN];
 	ptrA     tszNewPassword;
 
-	class TJabberAuth *auth;
+//	class TJabberAuth *auth;
+	char *gssapiHostName;
+
 	JabberCapsBits jabberServerCaps;
 
 	void  close(void);
@@ -410,9 +404,9 @@ struct JABBER_MODEMSGS
 enum JABBER_FT_TYPE { FT_SI, FT_OOB, FT_BYTESTREAM, FT_IBB, FT_HTTP };
 enum JABBER_FILE_STATE { FT_CONNECTING, FT_INITIALIZING, FT_RECEIVING, FT_DONE, FT_ERROR, FT_DENIED };
 
-struct filetransfer
+struct filetransfer : public MZeroedObject
 {
-	filetransfer(CJabberProto *proto);
+	filetransfer(CJabberProto *proto, struct JABBER_LIST_ITEM *item);
 	~filetransfer();
 
 	void close();
@@ -424,12 +418,13 @@ struct filetransfer
 	JABBER_FT_TYPE type;
 	HNETLIBCONN s;
 	JABBER_FILE_STATE state;
+	JABBER_LIST_ITEM *pItem;
 	char*  jid;
-	int    fileId;
+	int    fileId = -1;
 	char*  szId;
 	char*  sid;
 	int    bCompleted;
-	HANDLE hWaitEvent;
+	HANDLE hWaitEvent = INVALID_HANDLE_VALUE;
 
 	// For type == FT_BYTESTREAM
 	JABBER_BYTE_TRANSFER *jbt;
@@ -651,10 +646,6 @@ class CJabberFormDlg : public CJabberDlgBase
 	int m_formHeight;		// Actual height of the form
 	int m_curPos;			// Current scroll position
 
-	CCtrlButton btnSubmit, btnCancel;
-	void onClick_Submit(CCtrlButton*);
-	void onClick_Cancel(CCtrlButton*);
-
 public:
 	CJabberFormDlg(CJabberProto *ppro, const TiXmlElement *xNode, char *defTitle, JABBER_FORM_SUBMIT_FUNC pfnSubmit, void *userdata);
 
@@ -666,6 +657,7 @@ public:
 	}
 
 	bool OnInitDialog() override;
+	bool OnApply() override;
 	void OnDestroy() override;
 	INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam) override;
 };

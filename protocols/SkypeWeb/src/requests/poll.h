@@ -18,17 +18,20 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #ifndef _SKYPE_POLL_H_
 #define _SKYPE_POLL_H_
 
-class PollRequest : public HttpRequest
+struct PollRequest : public AsyncHttpRequest
 {
-public:
 	PollRequest(CSkypeProto *ppro) :
-	  HttpRequest(REQUEST_POST, FORMAT, "%s/v1/users/ME/endpoints/SELF/subscriptions/0/poll", ppro->m_szServer)
+		AsyncHttpRequest(REQUEST_POST, HOST_DEFAULT, "/users/ME/endpoints/" + mir_urlEncode(ppro->m_szId) + "/subscriptions/0/poll")
 	{
-		timeout = 60000;
-		flags |= NLHRF_PERSISTENT;
-		Headers
-			<< CHAR_VALUE("Accept", "application/json, text/javascript")
-			<< FORMAT_VALUE("RegistrationToken", "registrationToken=%s", ppro->m_szToken.get());
+		timeout = 120000;
+
+		if (ppro->m_iPollingId != -1)
+			m_szUrl.AppendFormat("?ackId=%d", ppro->m_iPollingId);
+
+		AddHeader("Referer", "https://web.skype.com/main");
+		AddHeader("ClientInfo", "os=Windows; osVer=8.1; proc=Win32; lcid=en-us; deviceType=1; country=n/a; clientName=swx-skype.com; clientVer=908/1.85.0.29");
+		AddHeader("Accept", "application/json; ver=1.0");
+		AddHeader("Accept-Language", "en, C");
 	}
 };
 #endif //_SKYPE_POLL_H_
